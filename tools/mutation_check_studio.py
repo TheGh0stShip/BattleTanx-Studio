@@ -9,9 +9,8 @@ The working tree is never modified.
 
 from __future__ import annotations
 
+import importlib.util
 import os
-import importlib.util
-import importlib.util
 import shutil
 import subprocess
 import sys
@@ -27,9 +26,15 @@ THUMBS = "tools/btga_studio/core/thumbnails.py"
 INPUT = "tools/btga_studio/gui/input.py"
 OVERLAY = "tools/btga_assets/overlay.py"
 INSPECTOR = "tools/btga_studio/core/inspector.py"
+PACKAGE = "tools/btga_studio/core/package.py"
+CONTROLLER = "tools/btga_studio/core/controller.py"
+BROWSER = "tools/btga_studio/core/browser.py"
+RENDERER = "tools/btga_studio/gui/renderer.py"
 COPIED = ("tools/btga_assets", "tools/btga_studio", "tools/benchmark_studio_editor.py", "tools/btga_world.py", "tools/lzari.py",
-          "tools/n64_texture.py", "tests/__init__.py", "tests/test_studio_editor.py", "tests/test_n64_assets.py")
+          "tools/n64_texture.py", "tests/__init__.py", "tests/test_studio_editor.py", "tests/test_n64_assets.py",
+          "tests/test_studio_authoring.py", "tests/test_studio_acceptance.py", "examples")
 TESTS = ("tests.test_studio_editor",)
+ACCEPTANCE_TESTS = ("tests.test_studio_acceptance",)
 
 MUTATIONS = (
     (GEOMETRY, "picking: barycentric bound", "hit = valid & (u >= 0) & (v >= 0) & (u + v <= 1) & (t >= 0)",
@@ -70,10 +75,33 @@ MUTATIONS = (
     (INSPECTOR, "unresolved fields editable", "    reason = record_reason or field_editable(spec)", "    reason = record_reason"),
 )
 
+# Defects fixed during the acceptance review; each must be caught by tests.test_studio_acceptance.
+ACCEPTANCE_MUTATIONS = (
+    (DOCUMENT, "duplicate drops instance scale", "if k in copy_}})", 'if k in copy_ and k != "scale"}})'),
+    (CONTROLLER, "cancelled Shift-drag keeps its copy",
+     "            if self._gizmo_duplicated:  # a cancelled Shift-drag must not leave the stacked copy behind\n                self._drop_gizmo_duplicate()",
+     "            if False:\n                self._drop_gizmo_duplicate()"),
+    (CONTROLLER, "empty Shift-drag keeps its copy", "            self._drop_gizmo_duplicate()  # refused or zero-length Shift-drag", "            pass"),
+    (PROJECT, "history shape unchecked", '            _check_history(map_data.get("history"), f"map {key!r}")', "            pass"),
+    (PROJECT, "map entries unchecked", "            if not isinstance(map_data, dict):", "            if False:"),
+    (PACKAGE, "package version accepts booleans and zero", "isinstance(version, bool) or version < 1", "False"),
+    (PACKAGE, "missing model dependency accepted", "                    and model not in models:", "                    and False:"),
+    (PACKAGE, "missing texture dependency accepted", "            if texture and _stem(str(texture)) not in textures:", "            if False:"),
+    (PACKAGE, "zip read errors escape", "except (zipfile.BadZipFile, RuntimeError, NotImplementedError, EOFError, OSError, ValueError) as error:",
+     "except (RuntimeError,) as error:"),
+    (BROWSER, "thumbnails requested by instance ID",
+     '        return self.model or (self.id if self.kind == "model" and self.source != "user" else None)',
+     '        return self.id if self.kind == "model" else None'),
+    (THUMBS, "unknown model stops the editor", "            except Exception as error:  # an unknown model ID must not stop the editor",
+     "            except KeyboardInterrupt as error:"),
+    (RENDERER, "authored navigation not drawn", '             if record.get("category") == "navigation_node" and not record.get("disabled")',
+     '             if False'),
+)
 
-def run(workdir: Path) -> bool:
+
+def run(workdir: Path, tests=TESTS) -> bool:
     env = dict(os.environ, PYOPENGL_PLATFORM=os.environ.get("PYOPENGL_PLATFORM", "egl"), BTGA_MUTATION_GATE="1")
-    result = subprocess.run([sys.executable, "-m", "unittest", *TESTS], cwd=workdir, env=env, stdout=subprocess.DEVNULL,
+    result = subprocess.run([sys.executable, "-m", "unittest", *tests], cwd=workdir, env=env, stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL, check=False)
     return result.returncode == 0
 
@@ -82,10 +110,8 @@ def main() -> int:
     if importlib.util.find_spec("numpy") is None:
         print("numpy is unavailable; refusing to treat skipped editor tests as a mutation baseline")
         return 2
-    if importlib.util.find_spec("numpy") is None:
-        print("numpy is unavailable; refusing to treat skipped editor tests as a mutation baseline")
-        return 2
-    originals = {path: (ROOT / path).read_text(encoding="utf-8") for path in {m[0] for m in MUTATIONS}}
+    plan = [(m, TESTS) for m in MUTATIONS] + [(m, ACCEPTANCE_TESTS) for m in ACCEPTANCE_MUTATIONS]
+    originals = {path: (ROOT / path).read_text(encoding="utf-8") for path in {m[0] for m, _ in plan}}
     with tempfile.TemporaryDirectory() as temp:
         work = Path(temp)
         for relative in COPIED:
@@ -96,23 +122,24 @@ def main() -> int:
             else:
                 shutil.copy2(source, target)
         (work / "tools" / "__init__.py").touch()
-        if not run(work):
-            print("baseline tests fail; refusing to judge mutations")
-            return 2
+        for tests in (TESTS, ACCEPTANCE_TESTS):
+            if not run(work, tests):
+                print(f"baseline {' '.join(tests)} fails; refusing to judge mutations")
+                return 2
         survivors = []
-        for path, name, before, after in MUTATIONS:
+        for (path, name, before, after), tests in plan:
             original = originals[path]
             if original.count(before) != 1:
                 print(f"STALE {name}: original text occurs {original.count(before)} times")
                 survivors.append(name)
                 continue
             (work / path).write_text(original.replace(before, after), encoding="utf-8")
-            passed = run(work)
+            passed = run(work, tests)
             (work / path).write_text(original, encoding="utf-8")
             print(f"{'SURVIVED' if passed else 'killed  '} {name}")
             if passed:
                 survivors.append(name)
-    print(f"{len(MUTATIONS) - len(survivors)}/{len(MUTATIONS)} mutations killed")
+    print(f"{len(plan) - len(survivors)}/{len(plan)} mutations killed")
     return 1 if survivors else 0
 
 

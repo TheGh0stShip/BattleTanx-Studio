@@ -32,12 +32,20 @@ include bounds, environment, minimap configuration, and navigation edits.
 
 A runtime reader must fail closed when:
 
-- the schema is newer than it supports;
-- a member is missing, duplicated, unlisted, unsafe, or has the wrong hash;
+- the schema is newer than it supports, or the schema version is not a
+  positive integer (booleans, strings and zero are refused);
+- the manifest, project, a map document, a record or a model resource is not
+  a JSON object of the expected shape (a typed `PackageError` names the map,
+  record or file; no other exception type escapes);
+- a member is missing, duplicated, unlisted, unsafe, has the wrong hash, or
+  fails the archive's own CRC check;
+- a placed instance references a Studio-original model whose resource is not
+  in the package, or a packaged model references a texture that is not in it;
 - a symbolic link or unsupported compression method is present;
 - a member or the total expanded archive exceeds configured limits;
 - a resource has invalid dimensions;
-- a placed record is malformed or lies outside map bounds; or
+- a placed record is malformed, belongs to an unknown record family, or lies
+  outside map bounds; or
 - required local source hashes do not match.
 
 The reference implementation is `tools/btga_studio/core/package.py`. Studio

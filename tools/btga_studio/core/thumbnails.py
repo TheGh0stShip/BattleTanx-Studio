@@ -236,7 +236,12 @@ class ThumbnailService:
             if job.generation < self.generation:
                 self.cancelled += 1
                 continue
-            self._in_flight[job.key] = self.executor.submit(self._render, str(self.root_for(job.model_id)), job.model_id, job.size)
+            try:
+                root = self.root_for(job.model_id)
+            except Exception as error:  # an unknown model ID must not stop the editor
+                self.failed[job.key] = f"{type(error).__name__}: {error}"
+                continue
+            self._in_flight[job.key] = self.executor.submit(self._render, str(root), job.model_id, job.size)
         return done
 
     @property

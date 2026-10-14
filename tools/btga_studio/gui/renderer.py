@@ -132,6 +132,38 @@ class Batch:
         gl.glDeleteVertexArrays(1, [self.vao])
 
 
+def navigation_segments(scene, hidden=frozenset()) -> list:
+    """Navigation overlay lines: source navigation points, plus authored ``navigation_node`` markers and their links.
+
+    Blank Studio maps have no source navigation table; their graph lives in the
+    markers' ``link_*`` fields (the same rule the package export uses), so it is
+    drawn from there.  Pure function of the scene, so it is tested without OpenGL.
+    """
+
+    colour = LAYER_COLOURS["navigation"]
+    out: list = []
+
+    def cross(x, y, z):
+        p = np.array([x, y, z], float)
+        for d in ((16, 0, 0), (0, 0, 16), (0, 32, 0)):
+            out.extend([(tuple(p - d), colour), (tuple(p + d), colour)])
+
+    for point in (scene.navigation or {}).get("points", []):
+        cross(point["x"], 0.0, point["z"])
+    nodes = {record["id"]: record for _, record in scene.records("markers")
+             if record.get("category") == "navigation_node" and not record.get("disabled") and record["id"] not in hidden}
+    for record_id in sorted(nodes):
+        record = nodes[record_id]
+        x, y, z = record["translation"]
+        cross(x, y, z)
+        for name in sorted(record.get("fields", {})):
+            target = nodes.get(record["fields"][name].get("value")) if name.startswith("link_") else None
+            if target is not None:
+                tx, ty, tz = target["translation"]
+                out.extend([((x, y + 8.0, z), colour), ((tx, ty + 8.0, tz), colour)])
+    return out
+
+
 class ViewportRenderer:
     def __init__(self, library):
         self.library = library
@@ -350,11 +382,8 @@ class ViewportRenderer:
                 mesh = scene.meshes.get(record["model"])
                 scale = np.asarray(record.get("scale") or (1.0, 1.0, 1.0), float)
                 self._box_lines(segments, mesh.lo * scale, mesh.hi * scale, record["translation"], record["yaw"], LAYER_COLOURS["selection"])
-        if layers.get("navigation") and scene.navigation:
-            for point in scene.navigation.get("points", []):
-                p = np.array([point["x"], 0.0, point["z"]])
-                for d in ((16, 0, 0), (0, 0, 16), (0, 32, 0)):
-                    segments += [(p - d, LAYER_COLOURS["navigation"]), (p + d, LAYER_COLOURS["navigation"])]
+        if layers.get("navigation"):
+            segments += navigation_segments(scene, self.user_hidden)
         if preview:
             self._box_lines(segments, preview["lo"], preview["hi"], preview["translation"], preview.get("yaw", 0), LAYER_COLOURS["preview"])
         boxes = [s for s in segments if len(s) == 6 and s[0] == "box"]

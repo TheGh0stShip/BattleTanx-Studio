@@ -34,7 +34,12 @@ class AssetEntry:
     source: str = "source"  # source | user
     editable: bool = True
     detail: str = ""
+    model: str | None = None  # model ID drawn for this entry (differs from ``id`` for user-placed instances)
     search: str = field(default="", compare=False)
+
+    @property
+    def model_id(self) -> str | None:
+        return self.model or (self.id if self.kind == "model" and self.source != "user" else None)
 
 
 def _entry(**kwargs) -> AssetEntry:
@@ -99,7 +104,7 @@ class AssetIndex:
         for family, record in scene.records("instances"):
             if record.get("source", {}).get("user_created"):
                 self.map_entries.append(_entry(id=record["id"], kind="model", category="User-placed", platform=platform,
-                                               label=record["model"].rsplit(":", 1)[-1][:12], source="user"))
+                                               label=record["model"].rsplit(":", 1)[-1][:12], source="user", model=record["model"]))
 
     def filter(self, text: str = "", platform: str | None = None, kind: str | None = None, category: str | None = None,
                map_only: bool = False, library: str | None = None) -> list[AssetEntry]:

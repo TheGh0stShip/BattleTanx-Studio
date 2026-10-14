@@ -106,9 +106,41 @@ def history_document(document: EditorDocument) -> dict:
     return {"undo": undo, "redo": redo}
 
 
+def _check_history(history, what: str) -> None:
+    """Shape check so a damaged history fails as ProjectError instead of crashing the editor."""
+
+    if history is None:
+        return
+    if not isinstance(history, dict):
+        raise ProjectError(f"{what}: history must be an object")
+    for stack in ("undo", "redo"):
+        entries = history.get(stack, [])
+        if not isinstance(entries, list):
+            raise ProjectError(f"{what}: history.{stack} must be a list")
+        for position, entry in enumerate(entries):
+            where = f"{what}: history.{stack}[{position}]"
+            if not isinstance(entry, dict):
+                raise ProjectError(f"{where} must be an object")
+            for name in ("user_index_before", "user_index_after"):
+                if not _plain_int(entry.get(name)):
+                    raise ProjectError(f"{where}.{name} must be an integer")
+            if not isinstance(entry.get("affected", []), list) or not isinstance(entry.get("label", ""), str):
+                raise ProjectError(f"{where} has a malformed label or affected list")
+            edits = entry.get("edits")
+            if stack == "undo" and not (_plain_int(edits) and edits >= 0):
+                raise ProjectError(f"{where}.edits must be a non-negative integer")
+            if stack == "redo" and not (isinstance(edits, list) and all(isinstance(e, dict) for e in edits)):
+                raise ProjectError(f"{where}.edits must be a list of edits")
+
+
+def _plain_int(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def restore_history(document: EditorDocument, history: dict | None) -> None:
     if not history:
         return
+    _check_history(history, "history")
     edits = document.overlay.edits
     total = sum(entry["edits"] for entry in history.get("undo", []))
     if total > len(edits):
@@ -233,7 +265,10 @@ class StudioProject:
             if actual != entry.source_fingerprint:
                 raise ProjectMismatch(f"map {key!r}: scene {entry.scene} has a different source (project "
                                       f"{(entry.source_fingerprint or '')[:12]}, catalog {actual[:12]}); its edits were not applied")
-        overlay = overlay_module.Overlay.from_json(json.dumps(entry.overlay)) if entry.overlay else overlay_module.Overlay.for_scene(scene.base)
+        try:
+            overlay = overlay_module.Overlay.from_json(json.dumps(entry.overlay)) if entry.overlay else overlay_module.Overlay.for_scene(scene.base)
+        except (KeyError, TypeError, ValueError, AttributeError) as error:
+            raise ProjectError(f"map {key!r}: field overlay is malformed ({type(error).__name__}: {error})") from error
         if overlay.scene_id != scene.base["id"]:
             raise ProjectMismatch(f"map {key!r}: overlay targets {overlay.scene_id}")
         document = EditorDocument(scene, overlay)
@@ -384,11 +419,29 @@ class StudioProject:
         if version == 1:
             data = migrate_v1(data)
         info = data.get("project") or {}
+        if not isinstance(info, dict) or not isinstance(info.get("target") or {}, dict):
+            raise ProjectError("project: metadata must be an object")
+        maps = data.get("maps") or {}
+        if not isinstance(maps, dict):
+            raise ProjectError("maps must be an object keyed by map key")
+        for family in ("dependencies", *DEFINITION_FAMILIES, "extra"):
+            if not isinstance(data.get(family) or {}, dict):
+                raise ProjectError(f"{family} must be an object")
+        if not isinstance(data.get("campaigns") or [], list):
+            raise ProjectError("campaigns must be a list")
         project = cls(info.get("title", "Untitled"), (info.get("target") or {}).get("game", "studio"), info.get("id"))
         project.project = copy.deepcopy(info)
         project.dependencies = copy.deepcopy(data.get("dependencies") or {"sources": [], "starter": None})
-        for key, map_data in sorted((data.get("maps") or {}).items()):
+        for key, map_data in sorted(maps.items()):
             check_key(key, "map key")
+            if not isinstance(map_data, dict):
+                raise ProjectError(f"map {key!r} must be an object")
+            if not isinstance(map_data.get("scene"), str):
+                raise ProjectError(f"map {key!r}: field scene must be a scene ID")
+            for name, kind in (("base", dict), ("overlay", dict), ("view", dict), ("minimap", dict), ("extra", dict)):
+                if map_data.get(name) is not None and not isinstance(map_data[name], kind):
+                    raise ProjectError(f"map {key!r}: field {name} must be an object")
+            _check_history(map_data.get("history"), f"map {key!r}")
             if map_data.get("kind") not in ("imported", "blank"):
                 raise ProjectError(f"map {key!r} has unknown kind {map_data.get('kind')!r}")
             entry = MapEntry(key, map_data["kind"], map_data.get("title", key), map_data["scene"], map_data.get("source_fingerprint"),

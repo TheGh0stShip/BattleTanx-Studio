@@ -5,20 +5,24 @@ Build a portable BTGAStudio folder (BTGAStudio.exe + runtime) on Windows.
 
 Creates an isolated virtual environment, installs the pinned requirements,
 freezes the editor with PyInstaller (windowed: no console), and adds a
-synthetic sample catalog and project.  It touches no game data and never
+synthetic sample catalog and project plus the ROM-free starter example
+project.  It touches no game data and never
 launches the editor.
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Source,
     [Parameter(Mandatory = $true)][string]$Output,
-    [string]$Python = "py"
+    [string]$Python = "py",
+    [string]$PythonVersion = "3.13"
 )
 $ErrorActionPreference = "Stop"
 $work = Join-Path $Output "build"
 $venv = Join-Path $work "venv"
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 if (-not (Test-Path (Join-Path $venv "Scripts\python.exe"))) {
-    if ($Python -eq "py") { & py -3 -m venv $venv } else { & $Python -m venv $venv }
+    # Pin the interpreter: "py -3" picks the newest installed Python, which may lack wheels for the pinned requirements.
+    if ($Python -eq "py") { & py "-$PythonVersion" -m venv $venv } else { & $Python -m venv $venv }
+    if ($LASTEXITCODE -ne 0) { throw "could not create a Python $PythonVersion virtual environment" }
 }
 $vpy = Join-Path $venv "Scripts\python.exe"
 & $vpy -m pip install --disable-pip-version-check --quiet -r (Join-Path $Source "tools\btga_studio\packaging\requirements-build.txt")
@@ -32,6 +36,7 @@ try {
     $samples = Join-Path $app "samples"
     & $vpy -m tools.btga_studio.samples (Join-Path $samples "sample-catalog") --project (Join-Path $samples "sample.btgaproj")
     if ($LASTEXITCODE -ne 0) { throw "sample generation failed" }
+    Copy-Item (Join-Path $Source "examples\starter-example.btgaproj") (Join-Path $samples "starter-example.btgaproj") -Force
     Copy-Item (Join-Path $Source "tools\btga_studio\packaging\README-windows.txt") (Join-Path $app "README.txt") -Force
 } finally {
     Pop-Location

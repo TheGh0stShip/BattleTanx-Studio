@@ -267,8 +267,11 @@ def read_package(data: bytes) -> Package:
         raise PackageError("missing manifest.json")
 
     def read(name: str) -> bytes:
-        with archive.open(name) as handle:
-            content = handle.read(LIMITS["file_bytes"] + 1)
+        try:
+            with archive.open(name) as handle:
+                content = handle.read(LIMITS["file_bytes"] + 1)
+        except (zipfile.BadZipFile, RuntimeError, NotImplementedError, EOFError, OSError, ValueError) as error:
+            raise PackageError(f"{name} cannot be read: {error}") from error
         if len(content) > LIMITS["file_bytes"]:
             raise PackageError(f"{name} expands beyond the file limit")
         return content
@@ -277,10 +280,12 @@ def read_package(data: bytes) -> Package:
         manifest = json.loads(read("manifest.json"))
     except ValueError as error:
         raise PackageError(f"manifest is not JSON: {error}") from error
-    if manifest.get("schema") != PACKAGE_SCHEMA:
+    if not isinstance(manifest, dict) or manifest.get("schema") != PACKAGE_SCHEMA:
         raise PackageError("not a BattleTanx content package")
     version = manifest.get("schema_version")
-    if not isinstance(version, int) or version > PACKAGE_VERSION:
+    if not isinstance(version, int) or isinstance(version, bool) or version < 1:
+        raise PackageError(f"package schema version {version!r} is invalid")
+    if version > PACKAGE_VERSION:
         raise PackageError(f"package schema {version} is newer than this reader supports ({PACKAGE_VERSION})")
     entries = manifest.get("files")
     if not isinstance(entries, list) or any(
@@ -307,9 +312,21 @@ def read_package(data: bytes) -> Package:
     try:
         project = json.loads(contents["project.json"])
         maps = {name[5:-5]: json.loads(content) for name, content in contents.items() if name.startswith("maps/")}
-        models = {json.loads(content)["id"]: json.loads(content) for name, content in contents.items() if name.startswith("resources/models/")}
+        models = {}
+        for name, content in contents.items():
+            if name.startswith("resources/models/"):
+                model = json.loads(content)
+                if not isinstance(model, dict) or not isinstance(model.get("id"), str) or not isinstance(model.get("mesh"), dict):
+                    raise PackageError(f"{name} is not a model resource")
+                if _stem(model["id"]) != name.rsplit("/", 1)[1][:-5]:
+                    raise PackageError(f"{name} holds model {model['id']!r} under the wrong name")
+                models[model["id"]] = model
     except (KeyError, ValueError) as error:
+        if isinstance(error, PackageError):
+            raise
         raise PackageError(f"malformed package content: {error}") from error
+    if not isinstance(project, dict):
+        raise PackageError("project.json must be an object")
     textures = {}
     for name, content in contents.items():
         if name.startswith("resources/textures/"):
@@ -319,18 +336,55 @@ def read_package(data: bytes) -> Package:
             if width == 0 or height == 0 or len(content) != 4 + width * height * 4:
                 raise PackageError(f"{name} has inconsistent dimensions")
             textures[name.rsplit("/", 1)[1][:-5]] = (width, height, content[4:])
-    for key, map_data in maps.items():
-        bounds = map_data.get("bounds")
-        if bounds is not None:
-            for axis in ("x", "z"):
-                lo, hi = bounds[axis]
-                if not (isinstance(lo, (int, float)) and isinstance(hi, (int, float)) and lo < hi and abs(lo) <= 1e6 and abs(hi) <= 1e6):
-                    raise PackageError(f"map {key}: invalid bounds on {axis}")
-        for family, records in (map_data.get("records") or {}).items():
-            for record in records:
-                position = record.get("translation")
-                if not (isinstance(position, list) and len(position) == 3 and all(isinstance(v, (int, float)) and abs(v) <= 1e6 for v in position)):
-                    raise PackageError(f"map {key}: record {record.get('id')} has an invalid position")
-                if bounds and not (bounds["x"][0] <= position[0] <= bounds["x"][1] and bounds["z"][0] <= position[2] <= bounds["z"][1]):
-                    raise PackageError(f"map {key}: record {record.get('id')} lies outside the map bounds")
+    for key, map_data in sorted(maps.items()):
+        _check_map(key, map_data, models)
+    for model_id, model in sorted(models.items()):
+        materials = model["mesh"].get("materials", [])
+        if not isinstance(materials, list):
+            raise PackageError(f"model {model_id}: field mesh.materials must be a list")
+        for material in materials:
+            texture = material.get("texture") if isinstance(material, dict) else None
+            if texture and _stem(str(texture)) not in textures:
+                raise PackageError(f"model {model_id}: field texture: missing dependency {texture}")
     return Package(manifest, project, maps, models, textures)
+
+
+def _number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and abs(value) <= 1e6
+
+
+def _check_map(key: str, map_data, models: dict) -> None:
+    """Structure, limits and Studio-resource dependencies of one map document; names map, record and field."""
+
+    if not isinstance(map_data, dict):
+        raise PackageError(f"map {key}: not an object")
+    bounds = map_data.get("bounds")
+    if bounds is not None:
+        if not isinstance(bounds, dict):
+            raise PackageError(f"map {key}: field bounds must be an object")
+        for axis in ("x", "z"):
+            pair = bounds.get(axis)
+            if not (isinstance(pair, list) and len(pair) == 2 and all(_number(v) for v in pair) and pair[0] < pair[1]):
+                raise PackageError(f"map {key}: invalid bounds on {axis}")
+    records = map_data.get("records") or {}
+    if not isinstance(records, dict):
+        raise PackageError(f"map {key}: field records must be an object")
+    count = 0
+    for family, items in sorted(records.items()):
+        if family not in ("instances", "markers", "collision") or not isinstance(items, list):
+            raise PackageError(f"map {key}: unexpected record family {family!r}")
+        count += len(items)
+        if count > LIMITS["records_per_map"]:
+            raise PackageError(f"map {key}: more than {LIMITS['records_per_map']} records")
+        for record in items:
+            if not isinstance(record, dict):
+                raise PackageError(f"map {key}: a {family} record is not an object")
+            position = record.get("translation")
+            if not (isinstance(position, list) and len(position) == 3 and all(_number(v) for v in position)):
+                raise PackageError(f"map {key}: record {record.get('id')} has an invalid position")
+            if bounds and not (bounds["x"][0] <= position[0] <= bounds["x"][1] and bounds["z"][0] <= position[2] <= bounds["z"][1]):
+                raise PackageError(f"map {key}: record {record.get('id')} lies outside the map bounds")
+            model = record.get("model")
+            if family == "instances" and isinstance(model, str) and model.startswith(tuple(f"{p}:" for p in STARTER_PLATFORMS)) \
+                    and model not in models:
+                raise PackageError(f"map {key}: record {record.get('id')} field model: missing dependency {model}")

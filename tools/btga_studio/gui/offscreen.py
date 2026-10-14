@@ -74,8 +74,61 @@ class OffscreenUI:
         self.backend.render(imgui.get_draw_data())
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
 
-    def screenshot(self, path: Path) -> None:
-        from tools.btga_assets.ps1_formats import encode_png_rgba
+    # -- synthetic input through Dear ImGui (the same path as real mouse and keyboard) --------------
+    def viewport_to_screen(self, x: float, y: float) -> tuple[float, float]:
+        if self.app.viewport_origin is None:
+            self.frame()
+        ox, oy = self.app.viewport_origin
+        return (ox + x, oy + y)
+
+    def world_to_screen(self, point) -> tuple[float, float] | None:
+        """Screen position of a world point in the viewport, or None when it is behind the camera."""
+
+        from tools.btga_studio.core import geometry as g
+
+        c = self.app.controller
+        local = g.project(c.camera, point, *c.viewport)
+        return None if local is None else self.viewport_to_screen(local[0], local[1])
+
+    def _modifiers(self, ctrl: bool, shift: bool) -> dict:
+        imgui = self.imgui
+        return {imgui.Key.mod_ctrl: ctrl, imgui.Key.left_ctrl: ctrl, imgui.Key.mod_shift: shift, imgui.Key.left_shift: shift}
+
+    def click(self, screen, ctrl: bool = False, shift: bool = False, settle: int = 1) -> None:
+        """Press and release the left button at a screen position (no movement in between)."""
+
+        modifiers = self._modifiers(ctrl, shift)
+        self.frame(mouse=screen, keys=modifiers)
+        self.frame(mouse=screen, buttons=(True, False), keys=modifiers)
+        self.frame(mouse=screen, buttons=(False, False), keys=modifiers)
+        self.frame(mouse=screen, keys=self._modifiers(False, False))
+        for _ in range(settle - 1):
+            self.frame(mouse=screen)
+
+    def drag(self, start, end, steps: int = 6, shift: bool = False) -> None:
+        """Left-button drag in screen space (box selection in the viewport)."""
+
+        modifiers = self._modifiers(False, shift)
+        self.frame(mouse=start, keys=modifiers)
+        self.frame(mouse=start, buttons=(True, False), keys=modifiers)
+        for step in range(1, steps + 1):
+            t = step / steps
+            self.frame(mouse=(start[0] + (end[0] - start[0]) * t, start[1] + (end[1] - start[1]) * t), buttons=(True, False), keys=modifiers)
+        self.frame(mouse=end, buttons=(False, False), keys=modifiers)
+        self.frame(mouse=end, keys=self._modifiers(False, False))
+
+    def press(self, key_name: str, mouse=(-1.0, -1.0), ctrl: bool = False, shift: bool = False) -> None:
+        """Press and release one key (``imgui.Key`` attribute name) with optional modifiers."""
+
+        key = getattr(self.imgui.Key, key_name)
+        modifiers = self._modifiers(ctrl, shift)
+        self.frame(mouse=mouse, keys=modifiers)
+        self.frame(mouse=mouse, keys={**modifiers, key: True})
+        self.frame(mouse=mouse, keys={**modifiers, key: False})
+        self.frame(mouse=mouse, keys=self._modifiers(False, False))
+
+    def pixels(self) -> tuple[int, int, bytes]:
+        """Top-down RGBA8 framebuffer contents."""
 
         gl = self.gl
         width, height = self.size
@@ -83,7 +136,15 @@ class OffscreenUI:
         data = gl.glReadPixels(0, 0, width, height, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE)
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
         rows = [data[i * width * 4 : (i + 1) * width * 4] for i in range(height)]
-        Path(path).write_bytes(encode_png_rgba(width, height, b"".join(reversed(rows))))
+        return width, height, b"".join(reversed(rows))
+
+    def screenshot(self, path: Path) -> None:
+        """Write the application framebuffer only (never the desktop) as PNG."""
+
+        from tools.btga_assets.ps1_formats import encode_png_rgba
+
+        width, height, rgba = self.pixels()
+        Path(path).write_bytes(encode_png_rgba(width, height, rgba))
 
     def close(self) -> None:
         self.app.before_exit()

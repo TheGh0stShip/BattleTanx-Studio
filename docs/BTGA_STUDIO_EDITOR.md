@@ -132,7 +132,9 @@ No shortcut fires while a text field has focus (`gui/input.py`, tested).
 
 **Test suites:**
 - `tests/test_studio_editor.py` (synthetic fixtures; needs `tools/btga_studio/requirements.txt`) covers camera and projection, rays, picking and tie-breaks, snapping, transform transactions, multi-selection, undo/redo, cancel, inspector validation, projects and mismatches, diagnostics, the thumbnail cache, lazy loading, the 1,000-edit × 10-cycle memory test, settings separation, input gating and an off-screen UI run.
-- `tools/mutation_check_studio.py` breaks picking, axes, yaw direction, unknown-byte preservation, serialisation determinism, undo grouping, thumbnail keys, ID stability and validation, and checks that the tests catch each.
+- `tests/test_studio_acceptance.py` drives the complete ROM-free workflow through the real application off-screen: Dear ImGui mouse clicks place and select objects in the viewport, keyboard shortcuts duplicate, copy, hide, isolate, lock, delete, undo and redo, and the project is saved to a path with spaces and non-ASCII characters, reopened and exported twice to byte-identical packages. It also holds regression tests for defects found in review (malformed projects and packages, Shift-drag cancel, duplicate scale, thumbnail browser, navigation overlay, packaged self-check).
+- `tests/test_studio_evidence.py` covers the acceptance tooling below with synthetic inputs.
+- `tools/mutation_check_studio.py` breaks picking, axes, yaw direction, unknown-byte preservation, serialisation determinism, undo grouping, thumbnail keys, ID stability and validation, plus every fix covered by the acceptance tests, and checks that the tests catch each.
 
 **Benchmarks:**
 - `tools/benchmark_studio_editor.py CATALOG` runs the ten-cycle stress test and the earlier overlay step, and reports RSS, retained heap and cache counts.
@@ -162,24 +164,19 @@ No shortcut fires while a text field has focus (`gui/input.py`, tested).
   - GPU thumbnails: 512.
   - Disk thumbnails: 64 MiB (configurable).
 
+## Acceptance tooling
+
+| Tool | Inputs | Outputs | Notes |
+|---|---|---|---|
+| `gui/offscreen.py` (`OffscreenUI`) | a `StudioApp` | frames, `click`/`drag`/`press` through Dear ImGui IO, `world_to_screen`, `pixels`, `screenshot` | EGL surfaceless; never creates a window; screenshots are the application framebuffer only |
+| `tools/studio_evidence.py` | a checkout, PNG files, directories | source identity (commit plus SHA-256 of uncommitted changes), `stale`, conflicting processes (`/proc`), image statistics and blank/flat rejection, adjacent JSON evidence records, file manifests and their comparison | git is used read-only; records contain no absolute paths; hashing is streamed |
+| `tools/capture_studio_acceptance.py OUT [--review VERDICTS]` | starter content only | 18 application screenshots with JSON records; `--review` merges reviewer verdicts and moves failures to `rejected/` | automatic checks reject blank or flat images, human review is still required |
+| `tools/audit_studio_package.py DIST [--manifest M] [--forbid TEXT]`, `--compare A B` | a packaged folder | PE subsystem, required files, forbidden file types, forbidden text (ASCII and UTF-16LE), manifest; differing files between two builds | constant memory (4 MiB scan windows) |
+| `tools/benchmark_studio_cycles.py [--cycles N]` | starter content | open/edit/undo/validate latency, per-cycle RSS and traced heap, second-half spread | samples are preallocated so the probe does not measure itself |
+
 ## Windows build
 
-`tools/btga_studio/packaging/build_windows.ps1` creates an isolated venv, installs the pinned requirements, freezes `BTGAStudio.exe` with PyInstaller (windowed), adds the synthetic sample catalog and project, and zips the folder.
+`tools/btga_studio/packaging/build_windows.ps1` creates an isolated venv with Python 3.13 (`-PythonVersion`; `py -3` would pick the newest installed interpreter), installs the pinned requirements, freezes `BTGAStudio.exe` with PyInstaller (windowed), adds the synthetic sample catalog and project and the ROM-free starter example (`samples/starter-example.btgaproj`), and zips the folder.
+- **Self-check:** `BTGAStudio.exe --self-check REPORT.json` exercises the starter workflow without a window and, when frozen, verifies that the shipped starter example equals a fresh build of it.
 - **Run it** with `powershell -WindowStyle Hidden -NonInteractive`. It never launches the editor.
 - **Outputs** go outside the repository.
-EOF
-python3 - <<'EOF'
-p='config/tooling_inventory.toml'; s=open(p).read()
-s=s.replace('''tools = [
-  "benchmark_studio_api.py",''','''tools = [
-  "benchmark_studio_api.py",
-  "benchmark_studio_editor.py",''')
-s=s.replace('''  "mutation_check_ps1_assets.py",
-  "ps1_assets.py",''','''  "mutation_check_ps1_assets.py",
-  "mutation_check_studio.py",
-  "ps1_assets.py",''')
-s=s.replace('''tests/test_n64_assets.py and tests/test_world_semantics.py, the''','''tests/test_n64_assets.py, tests/test_world_semantics.py and tests/test_studio_editor.py, the''')
-s=s.replace('''the Studio resource API and non-destructive edit overlays."''','''the Studio resource API, non-destructive edit overlays and the BTGA Studio desktop editor (tools/btga_studio)."''')
-open(p,'w').write(s)
-EOF
-python3 -m unittest tests.test_studio_editor

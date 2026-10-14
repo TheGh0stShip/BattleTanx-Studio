@@ -91,6 +91,8 @@ class EditorController:
 
             self.registry = SourceRegistry(settings.directory)
         self._gizmo_start = None
+        self._gizmo_duplicated = False
+        self._gizmo_selection: list[str] = []
         self.refresh_library()
 
     # -- messages ---------------------------------------------------------------
@@ -358,6 +360,9 @@ class EditorController:
     def cancel(self) -> None:
         if self.document and self.document.transforming:
             self.document.cancel_transform()
+            if self._gizmo_duplicated:  # a cancelled Shift-drag must not leave the stacked copy behind
+                self._drop_gizmo_duplicate()
+        self._gizmo_duplicated = False
         self.placement = None
         self.preview = None
 
@@ -471,20 +476,32 @@ class EditorController:
         return g.model_matrix(pivot, first["yaw"] if single else 0, first.get("scale") if single else None)
 
     def gizmo_begin(self, duplicate: bool = False) -> bool:
+        self._gizmo_duplicated = False
+        self._gizmo_selection = list(self.document.selection)
         try:
             if duplicate:
                 self.document.duplicate(offset=(0.0, 0.0, 0.0))
+                self._gizmo_duplicated = True
             self.document.begin_transform()
         except EditError as error:
+            if self._gizmo_duplicated:
+                self._drop_gizmo_duplicate()
+                self._gizmo_duplicated = False
             self.log("error", f"transform: {error}")
             return False
         self._gizmo_start = self.gizmo_matrix()
         return True
 
+    def _drop_gizmo_duplicate(self) -> None:
+        self.document.undo()
+        self.document.selection = [i for i in self._gizmo_selection if self.document.scene.record(i)]
+
     def gizmo_update(self, matrix: np.ndarray, scale_mode: bool = False) -> None:
         """Feed the manipulated matrix: translation, yaw and (scale mode) scale relative to the drag start."""
 
         start = self._gizmo_start
+        if start is None or not self.document.transforming:
+            return  # Esc cancelled the drag; ignore the rest of this gizmo interaction
         delta = matrix[:3, 3] - start[:3, 3]
         yaw0 = math.atan2(start[0, 2], start[0, 0])
         yaw1 = math.atan2(matrix[0, 2], matrix[0, 0])
@@ -504,10 +521,17 @@ class EditorController:
             self.log("warning", str(error))
 
     def gizmo_end(self) -> None:
+        if not self.document.transforming:  # cancelled with Esc while the gizmo was still held
+            self._gizmo_duplicated = False
+            return
         try:
-            self.document.commit_transform()
+            committed = self.document.commit_transform()
         except EditError as error:
+            committed = None
             self.log("error", f"transform refused: {error}")
+        if committed is None and self._gizmo_duplicated:
+            self._drop_gizmo_duplicate()  # refused or zero-length Shift-drag
+        self._gizmo_duplicated = False
         self.request_diagnostics()
 
     # -- commands -------------------------------------------------------------------------

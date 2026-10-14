@@ -98,6 +98,7 @@ class StudioApp:
         self.binding_error = None
         self.title = "BattleTanx Studio"
         self.drag_payload = None
+        self.viewport_origin = None  # screen position of the viewport image (used by the off-screen acceptance driver)
         self._renderer_cls = None
 
     # -- lifecycle -----------------------------------------------------------------
@@ -714,6 +715,7 @@ class StudioApp:
         selection = set(c.document.selection)
         texture = self.renderer.render(c.camera, width, height, selection, c.preview)
         origin = imgui.get_cursor_screen_pos()
+        self.viewport_origin = (origin.x, origin.y)
         imgui.image(imgui.ImTextureRef(texture), imgui.ImVec2(width, height), imgui.ImVec2(0, 1), imgui.ImVec2(1, 0))
         hovered = imgui.is_item_hovered()
         io = imgui.get_io()
@@ -1050,7 +1052,7 @@ class StudioApp:
 
     def drag_source(self, entry) -> None:
         if entry.editable and entry.kind in ("model", "gameplay") and imgui.begin_drag_drop_source():
-            self.drag_payload = ("model" if entry.kind == "model" else "marker", entry.id)
+            self.drag_payload = ("model", entry.model_id) if entry.kind == "model" else ("marker", entry.id)
             imgui.set_drag_drop_payload_py_id("BTGA_ASSET", 1)
             imgui.text(f"Place {entry.label}")
             imgui.end_drag_drop_source()
@@ -1058,6 +1060,8 @@ class StudioApp:
     def activate_asset(self, entry) -> None:
         if not entry.editable:
             self.controller.log("warning", f"{entry.label} is read-only: {entry.detail}")
+        elif entry.kind == "model" and entry.source == "user":
+            self.controller.frame_record(entry.id)  # a placed instance: select and frame it
         elif entry.kind == "model":
             self.try_placement("model", entry.id)
         elif entry.kind == "gameplay":
@@ -1082,8 +1086,9 @@ class StudioApp:
                     if column:
                         imgui.same_line()
                     imgui.begin_group()
-                    pixels = self.thumbnails.request(entry.id, size, priority=line) if self.thumbnails else None
-                    texture = self.thumbnail_texture(entry.id, pixels)
+                    model_id = entry.model_id
+                    pixels = self.thumbnails.request(model_id, size, priority=line) if self.thumbnails and model_id else None
+                    texture = self.thumbnail_texture(model_id, pixels) if model_id else None
                     if texture:
                         clicked = imgui.image_button(f"##t{entry.id}", imgui.ImTextureRef(texture), imgui.ImVec2(size, size))
                     else:
@@ -1365,8 +1370,15 @@ def self_check(report: Path) -> int:
             read = read_package(package)
             controller.request_diagnostics(immediate=True)
             controller.poll_diagnostics(wait=True)
+            shipped = Path(sys.executable).parent / "samples" / "starter-example.btgaproj"
+            shipped_ok = None
+            if getattr(sys, "frozen", False):  # the packaged example must load and equal a fresh build of it
+                shipped_ok = projects.dumps(projects.load_project(shipped)) == projects.dumps(build_example(controller.library))
+                if not shipped_ok:
+                    raise RuntimeError("samples/starter-example.btgaproj differs from the built-in starter example")
             result["steps"] = {"maps": len(project.maps), "placed": placed, "package_bytes": len(package), "package_maps": len(read.maps),
-                               "diagnostics": len(controller.diagnostics), "seconds": round(time.perf_counter() - start, 3)}
+                               "diagnostics": len(controller.diagnostics), "shipped_example": shipped_ok,
+                               "seconds": round(time.perf_counter() - start, 3)}
             controller.shutdown()
         result["ok"] = True
     except Exception:

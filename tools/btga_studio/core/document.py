@@ -323,7 +323,8 @@ class EditorDocument:
             self._check_bounds(copy_["translation"])
             copy_["source"] = {"user_created": True, "template": record_id}
             if family == "instances":
-                edits.append({"op": "add_instance", "instance": {k: copy_[k] for k in ("model", "translation", "yaw", "category", "source")}})
+                edits.append({"op": "add_instance", "instance": {k: copy_[k] for k in ("model", "translation", "yaw", "category", "source", "scale")
+                                                                if k in copy_}})
             elif family == "markers":
                 edits.append({"op": "add_marker", "marker": copy_})
             else:
