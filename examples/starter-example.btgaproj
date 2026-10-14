@@ -1,0 +1,3019 @@
+{
+ "campaigns": [
+  {
+   "id": "tutorial",
+   "missions": [
+    "first_strike"
+   ],
+   "title": "Tutorial"
+  }
+ ],
+ "dependencies": {
+  "sources": [],
+  "starter": 1
+ },
+ "gangs": {
+  "blue_team": {
+   "colour": [
+    50,
+    90,
+    210
+   ],
+   "tanks": [
+    "scout",
+    "heavy"
+   ],
+   "title": "Blue team"
+  },
+  "red_team": {
+   "colour": [
+    200,
+    50,
+    50
+   ],
+   "tanks": [
+    "scout"
+   ],
+   "title": "Red team"
+  }
+ },
+ "maps": {
+  "arena": {
+   "base": {
+    "bounds": {
+     "map": {
+      "evidence": "Studio map limits",
+      "status": "studio",
+      "x": [
+       -1024,
+       1024
+      ],
+      "z": [
+       -1024,
+       1024
+      ]
+     }
+    },
+    "collision": [],
+    "environment": [
+     {
+      "clear_and_fog_colour": [
+       96,
+       120,
+       150
+      ],
+      "evidence": "Studio environment",
+      "kind": "studio"
+     }
+    ],
+    "id": "studio:scene:map_arena",
+    "instances": [],
+    "kind": "scene",
+    "markers": [],
+    "minimap": {
+     "selections": [],
+     "status": "generated"
+    },
+    "models": [],
+    "music": {
+     "status": "none"
+    },
+    "navigation": null,
+    "schema": "btga-neutral",
+    "schema_version": 1,
+    "semantics_version": 3,
+    "source": {
+     "blank": true,
+     "map": "arena",
+     "platform": "studio"
+    },
+    "title": "Square arena",
+    "unresolved": []
+   },
+   "history": {
+    "redo": [],
+    "undo": [
+     {
+      "affected": [
+       "user:0323e1fb3e43:0"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 1,
+      "user_index_before": 0
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:1"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 2,
+      "user_index_before": 1
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:2"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 3,
+      "user_index_before": 2
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:3"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 4,
+      "user_index_before": 3
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:4"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 5,
+      "user_index_before": 4
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:5"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 6,
+      "user_index_before": 5
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:6"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 7,
+      "user_index_before": 6
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:7"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 8,
+      "user_index_before": 7
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:8"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 9,
+      "user_index_before": 8
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:9"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 10,
+      "user_index_before": 9
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:10"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 11,
+      "user_index_before": 10
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:11"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 12,
+      "user_index_before": 11
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:12"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 13,
+      "user_index_before": 12
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:13"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 14,
+      "user_index_before": 13
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:14"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 15,
+      "user_index_before": 14
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:15"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 16,
+      "user_index_before": 15
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:16"
+      ],
+      "edits": 1,
+      "label": "Place team_start",
+      "user_index_after": 17,
+      "user_index_before": 16
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:17"
+      ],
+      "edits": 1,
+      "label": "Place team_start",
+      "user_index_after": 18,
+      "user_index_before": 17
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:18"
+      ],
+      "edits": 1,
+      "label": "Place team_start",
+      "user_index_after": 19,
+      "user_index_before": 18
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:19"
+      ],
+      "edits": 1,
+      "label": "Place team_start",
+      "user_index_after": 20,
+      "user_index_before": 19
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:20"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 21,
+      "user_index_before": 20
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:21"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 22,
+      "user_index_before": 21
+     },
+     {
+      "affected": [
+       "user:0323e1fb3e43:22"
+      ],
+      "edits": 1,
+      "label": "Place pickup",
+      "user_index_after": 23,
+      "user_index_before": 22
+     }
+    ]
+   },
+   "kind": "blank",
+   "minimap": {
+    "height": 64,
+    "mode": "generated",
+    "width": 64
+   },
+   "overlay": {
+    "edits": [
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:0323e1fb3e43:0",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -768.0,
+        0.0,
+        -768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:0323e1fb3e43:1",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -768.0,
+        0.0,
+        -256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:0323e1fb3e43:2",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -768.0,
+        0.0,
+        256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:0323e1fb3e43:3",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -768.0,
+        0.0,
+        768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:0323e1fb3e43:4",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -256.0,
+        0.0,
+        -768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:0323e1fb3e43:5",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -256.0,
+        0.0,
+        -256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:0323e1fb3e43:6",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -256.0,
+        0.0,
+        256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:0323e1fb3e43:7",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -256.0,
+        0.0,
+        768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:0323e1fb3e43:8",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        256.0,
+        0.0,
+        -768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:0323e1fb3e43:9",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        256.0,
+        0.0,
+        -256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:0323e1fb3e43:10",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        256.0,
+        0.0,
+        256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:0323e1fb3e43:11",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        256.0,
+        0.0,
+        768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:0323e1fb3e43:12",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        768.0,
+        0.0,
+        -768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:0323e1fb3e43:13",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        768.0,
+        0.0,
+        -256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:0323e1fb3e43:14",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        768.0,
+        0.0,
+        256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:0323e1fb3e43:15",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        768.0,
+        0.0,
+        768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "marker": {
+       "category": "team_start",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:1cc859fa140f50f1ed79b31b",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "team": {
+         "evidence": "proven",
+         "meaning": "Studio format: team",
+         "offset": null,
+         "range": [
+          0,
+          7
+         ],
+         "type": "u8",
+         "value": 0
+        }
+       },
+       "id": "user:0323e1fb3e43:16",
+       "models": [
+        "studio:model:1cc859fa140f50f1ed79b31b"
+       ],
+       "platform": "studio",
+       "restrictions": {
+        "max_per_team": 5
+       },
+       "source": {
+        "template": "studio:template:team_start",
+        "user_created": true
+       },
+       "source_kind": "studio_team_start",
+       "translation": [
+        -800.0,
+        0.0,
+        -800.0
+       ],
+       "yaw": 8192
+      },
+      "op": "add_marker"
+     },
+     {
+      "marker": {
+       "category": "team_start",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:1cc859fa140f50f1ed79b31b",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "team": {
+         "evidence": "proven",
+         "meaning": "Studio format: team",
+         "offset": null,
+         "range": [
+          0,
+          7
+         ],
+         "type": "u8",
+         "value": 1
+        }
+       },
+       "id": "user:0323e1fb3e43:17",
+       "models": [
+        "studio:model:1cc859fa140f50f1ed79b31b"
+       ],
+       "platform": "studio",
+       "restrictions": {
+        "max_per_team": 5
+       },
+       "source": {
+        "template": "studio:template:team_start",
+        "user_created": true
+       },
+       "source_kind": "studio_team_start",
+       "translation": [
+        800.0,
+        0.0,
+        -800.0
+       ],
+       "yaw": 57344
+      },
+      "op": "add_marker"
+     },
+     {
+      "marker": {
+       "category": "team_start",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:1cc859fa140f50f1ed79b31b",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "team": {
+         "evidence": "proven",
+         "meaning": "Studio format: team",
+         "offset": null,
+         "range": [
+          0,
+          7
+         ],
+         "type": "u8",
+         "value": 2
+        }
+       },
+       "id": "user:0323e1fb3e43:18",
+       "models": [
+        "studio:model:1cc859fa140f50f1ed79b31b"
+       ],
+       "platform": "studio",
+       "restrictions": {
+        "max_per_team": 5
+       },
+       "source": {
+        "template": "studio:template:team_start",
+        "user_created": true
+       },
+       "source_kind": "studio_team_start",
+       "translation": [
+        -800.0,
+        0.0,
+        800.0
+       ],
+       "yaw": 24576
+      },
+      "op": "add_marker"
+     },
+     {
+      "marker": {
+       "category": "team_start",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:1cc859fa140f50f1ed79b31b",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "team": {
+         "evidence": "proven",
+         "meaning": "Studio format: team",
+         "offset": null,
+         "range": [
+          0,
+          7
+         ],
+         "type": "u8",
+         "value": 3
+        }
+       },
+       "id": "user:0323e1fb3e43:19",
+       "models": [
+        "studio:model:1cc859fa140f50f1ed79b31b"
+       ],
+       "platform": "studio",
+       "restrictions": {
+        "max_per_team": 5
+       },
+       "source": {
+        "template": "studio:template:team_start",
+        "user_created": true
+       },
+       "source_kind": "studio_team_start",
+       "translation": [
+        800.0,
+        0.0,
+        800.0
+       ],
+       "yaw": 40960
+      },
+      "op": "add_marker"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:0323e1fb3e43:20",
+       "model": "studio:model:5629a553bdab65f87184e290",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -300.0,
+        0.0,
+        0.0
+       ],
+       "yaw": 16384
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:0323e1fb3e43:21",
+       "model": "studio:model:5629a553bdab65f87184e290",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        300.0,
+        0.0,
+        0.0
+       ],
+       "yaw": 16384
+      },
+      "op": "add_instance"
+     },
+     {
+      "marker": {
+       "category": "pickup",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:9b3754608175b97af151af34",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "pickup_type": {
+         "enum": {
+          "0": "repair",
+          "1": "ammunition",
+          "2": "weapon",
+          "3": "boost"
+         },
+         "enum_closed": true,
+         "evidence": "proven",
+         "meaning": "Studio format: pickup type",
+         "offset": null,
+         "range": [
+          0,
+          255
+         ],
+         "type": "u8",
+         "value": 2
+        },
+        "respawn_seconds": {
+         "evidence": "proven",
+         "meaning": "Studio format: respawn delay (0 = never)",
+         "offset": null,
+         "range": [
+          0,
+          65535
+         ],
+         "type": "u16",
+         "value": 30
+        }
+       },
+       "id": "user:0323e1fb3e43:22",
+       "models": [
+        "studio:model:9b3754608175b97af151af34"
+       ],
+       "platform": "studio",
+       "restrictions": {},
+       "source": {
+        "template": "studio:template:pickup",
+        "user_created": true
+       },
+       "source_kind": "studio_pickup",
+       "translation": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_marker"
+     }
+    ],
+    "next_user_index": 23,
+    "platform": "studio",
+    "scene": "studio:scene:map_arena",
+    "schema": "btga-overlay",
+    "schema_version": 1
+   },
+   "scene": "studio:scene:map_arena",
+   "title": "Square arena",
+   "view": {
+    "hidden": [],
+    "locked": []
+   }
+  },
+  "target_range": {
+   "base": {
+    "bounds": {
+     "map": {
+      "evidence": "Studio map limits",
+      "status": "studio",
+      "x": [
+       -1024,
+       1024
+      ],
+      "z": [
+       -1024,
+       1024
+      ]
+     }
+    },
+    "collision": [],
+    "environment": [
+     {
+      "clear_and_fog_colour": [
+       96,
+       120,
+       150
+      ],
+      "evidence": "Studio environment",
+      "kind": "studio"
+     }
+    ],
+    "id": "studio:scene:map_target_range",
+    "instances": [],
+    "kind": "scene",
+    "markers": [],
+    "minimap": {
+     "selections": [],
+     "status": "generated"
+    },
+    "models": [],
+    "music": {
+     "status": "none"
+    },
+    "navigation": null,
+    "schema": "btga-neutral",
+    "schema_version": 1,
+    "semantics_version": 3,
+    "source": {
+     "blank": true,
+     "map": "target_range",
+     "platform": "studio"
+    },
+    "title": "Target range",
+    "unresolved": []
+   },
+   "history": {
+    "redo": [],
+    "undo": [
+     {
+      "affected": [
+       "user:f6491ecdc2d0:0"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 1,
+      "user_index_before": 0
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:1"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 2,
+      "user_index_before": 1
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:2"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 3,
+      "user_index_before": 2
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:3"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 4,
+      "user_index_before": 3
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:4"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 5,
+      "user_index_before": 4
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:5"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 6,
+      "user_index_before": 5
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:6"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 7,
+      "user_index_before": 6
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:7"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 8,
+      "user_index_before": 7
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:8"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 9,
+      "user_index_before": 8
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:9"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 10,
+      "user_index_before": 9
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:10"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 11,
+      "user_index_before": 10
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:11"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 12,
+      "user_index_before": 11
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:12"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 13,
+      "user_index_before": 12
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:13"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 14,
+      "user_index_before": 13
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:14"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 15,
+      "user_index_before": 14
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:15"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 16,
+      "user_index_before": 15
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:16"
+      ],
+      "edits": 1,
+      "label": "Place player_spawn",
+      "user_index_after": 17,
+      "user_index_before": 16
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:17"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 18,
+      "user_index_before": 17
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:18"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 19,
+      "user_index_before": 18
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:19"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 20,
+      "user_index_before": 19
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:20"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 21,
+      "user_index_before": 20
+     },
+     {
+      "affected": [
+       "user:f6491ecdc2d0:21"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 22,
+      "user_index_before": 21
+     }
+    ]
+   },
+   "kind": "blank",
+   "minimap": {
+    "height": 64,
+    "mode": "generated",
+    "width": 64
+   },
+   "overlay": {
+    "edits": [
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:0",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -768.0,
+        0.0,
+        -768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:1",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -768.0,
+        0.0,
+        -256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:2",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -768.0,
+        0.0,
+        256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:3",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -768.0,
+        0.0,
+        768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:4",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -256.0,
+        0.0,
+        -768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:5",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -256.0,
+        0.0,
+        -256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:6",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -256.0,
+        0.0,
+        256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:7",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -256.0,
+        0.0,
+        768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:8",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        256.0,
+        0.0,
+        -768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:9",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        256.0,
+        0.0,
+        -256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:10",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        256.0,
+        0.0,
+        256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:11",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        256.0,
+        0.0,
+        768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:12",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        768.0,
+        0.0,
+        -768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:13",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        768.0,
+        0.0,
+        -256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:14",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        768.0,
+        0.0,
+        256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:15",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        768.0,
+        0.0,
+        768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "marker": {
+       "category": "player_spawn",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:1cc859fa140f50f1ed79b31b",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "player": {
+         "evidence": "proven",
+         "meaning": "Studio format: player slot",
+         "offset": null,
+         "range": [
+          0,
+          3
+         ],
+         "type": "u8",
+         "value": 0
+        },
+        "team": {
+         "evidence": "proven",
+         "meaning": "Studio format: team",
+         "offset": null,
+         "range": [
+          0,
+          7
+         ],
+         "type": "u8",
+         "value": 0
+        }
+       },
+       "id": "user:f6491ecdc2d0:16",
+       "models": [
+        "studio:model:1cc859fa140f50f1ed79b31b"
+       ],
+       "platform": "studio",
+       "restrictions": {},
+       "source": {
+        "template": "studio:template:player_spawn",
+        "user_created": true
+       },
+       "source_kind": "studio_player_spawn",
+       "translation": [
+        0.0,
+        0.0,
+        800.0
+       ],
+       "yaw": 32768
+      },
+      "op": "add_marker"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:17",
+       "model": "studio:model:2171b4c91176f8fe8ccf592c",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -600.0,
+        0.0,
+        -500.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:18",
+       "model": "studio:model:2171b4c91176f8fe8ccf592c",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -300.0,
+        0.0,
+        -500.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:19",
+       "model": "studio:model:2171b4c91176f8fe8ccf592c",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        0.0,
+        0.0,
+        -500.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:20",
+       "model": "studio:model:2171b4c91176f8fe8ccf592c",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        300.0,
+        0.0,
+        -500.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:f6491ecdc2d0:21",
+       "model": "studio:model:2171b4c91176f8fe8ccf592c",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        600.0,
+        0.0,
+        -500.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     }
+    ],
+    "next_user_index": 22,
+    "platform": "studio",
+    "scene": "studio:scene:map_target_range",
+    "schema": "btga-overlay",
+    "schema_version": 1
+   },
+   "scene": "studio:scene:map_target_range",
+   "title": "Target range",
+   "view": {
+    "hidden": [],
+    "locked": []
+   }
+  },
+  "training_grounds": {
+   "base": {
+    "bounds": {
+     "map": {
+      "evidence": "Studio map limits",
+      "status": "studio",
+      "x": [
+       -1024,
+       1024
+      ],
+      "z": [
+       -1024,
+       1024
+      ]
+     }
+    },
+    "collision": [],
+    "environment": [
+     {
+      "clear_and_fog_colour": [
+       96,
+       120,
+       150
+      ],
+      "evidence": "Studio environment",
+      "kind": "studio"
+     }
+    ],
+    "id": "studio:scene:map_training_grounds",
+    "instances": [],
+    "kind": "scene",
+    "markers": [],
+    "minimap": {
+     "selections": [],
+     "status": "generated"
+    },
+    "models": [],
+    "music": {
+     "status": "none"
+    },
+    "navigation": null,
+    "schema": "btga-neutral",
+    "schema_version": 1,
+    "semantics_version": 3,
+    "source": {
+     "blank": true,
+     "map": "training_grounds",
+     "platform": "studio"
+    },
+    "title": "Training grounds",
+    "unresolved": []
+   },
+   "history": {
+    "redo": [],
+    "undo": [
+     {
+      "affected": [
+       "user:ee5f652bd56d:0"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 1,
+      "user_index_before": 0
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:1"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 2,
+      "user_index_before": 1
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:2"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 3,
+      "user_index_before": 2
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:3"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 4,
+      "user_index_before": 3
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:4"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 5,
+      "user_index_before": 4
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:5"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 6,
+      "user_index_before": 5
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:6"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 7,
+      "user_index_before": 6
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:7"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 8,
+      "user_index_before": 7
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:8"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 9,
+      "user_index_before": 8
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:9"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 10,
+      "user_index_before": 9
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:10"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 11,
+      "user_index_before": 10
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:11"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 12,
+      "user_index_before": 11
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:12"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 13,
+      "user_index_before": 12
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:13"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 14,
+      "user_index_before": 13
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:14"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 15,
+      "user_index_before": 14
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:15"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 16,
+      "user_index_before": 15
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:16"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 17,
+      "user_index_before": 16
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:17"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 18,
+      "user_index_before": 17
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:18"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 19,
+      "user_index_before": 18
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:19"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 20,
+      "user_index_before": 19
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:20"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 21,
+      "user_index_before": 20
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:21"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 22,
+      "user_index_before": 21
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:22"
+      ],
+      "edits": 1,
+      "label": "Place player_spawn",
+      "user_index_after": 23,
+      "user_index_before": 22
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:23"
+      ],
+      "edits": 1,
+      "label": "Place model",
+      "user_index_after": 24,
+      "user_index_before": 23
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:24"
+      ],
+      "edits": 1,
+      "label": "Place objective",
+      "user_index_after": 25,
+      "user_index_before": 24
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:25"
+      ],
+      "edits": 1,
+      "label": "Place unit_spawner",
+      "user_index_after": 26,
+      "user_index_before": 25
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:26"
+      ],
+      "edits": 1,
+      "label": "Place pickup",
+      "user_index_after": 27,
+      "user_index_before": 26
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:27"
+      ],
+      "edits": 1,
+      "label": "Place hazard",
+      "user_index_after": 28,
+      "user_index_before": 27
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:28"
+      ],
+      "edits": 1,
+      "label": "Place navigation_node",
+      "user_index_after": 29,
+      "user_index_before": 28
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:29"
+      ],
+      "edits": 1,
+      "label": "Place navigation_node",
+      "user_index_after": 30,
+      "user_index_before": 29
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:30"
+      ],
+      "edits": 1,
+      "label": "Place navigation_node",
+      "user_index_after": 31,
+      "user_index_before": 30
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:28"
+      ],
+      "edits": 1,
+      "label": "Set link_0",
+      "user_index_after": 31,
+      "user_index_before": 31
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:29"
+      ],
+      "edits": 1,
+      "label": "Set link_0",
+      "user_index_after": 31,
+      "user_index_before": 31
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:29"
+      ],
+      "edits": 1,
+      "label": "Set link_1",
+      "user_index_after": 31,
+      "user_index_before": 31
+     }
+    ]
+   },
+   "kind": "blank",
+   "minimap": {
+    "height": 64,
+    "mode": "generated",
+    "width": 64
+   },
+   "overlay": {
+    "edits": [
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:0",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -768.0,
+        0.0,
+        -768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:1",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -768.0,
+        0.0,
+        -256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:2",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -768.0,
+        0.0,
+        256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:3",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -768.0,
+        0.0,
+        768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:4",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -256.0,
+        0.0,
+        -768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:5",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -256.0,
+        0.0,
+        -256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:6",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -256.0,
+        0.0,
+        256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:7",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -256.0,
+        0.0,
+        768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:8",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        256.0,
+        0.0,
+        -768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:9",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        256.0,
+        0.0,
+        -256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:10",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        256.0,
+        0.0,
+        256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:11",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        256.0,
+        0.0,
+        768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:12",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        768.0,
+        0.0,
+        -768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:13",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        768.0,
+        0.0,
+        -256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:14",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        768.0,
+        0.0,
+        256.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:15",
+       "model": "studio:model:e1662c4f8b36b603037b7833",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        768.0,
+        0.0,
+        768.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:16",
+       "model": "studio:model:166cb509ff21028239c1eea9",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:17",
+       "model": "studio:model:6f59977d5a367d5d841327af",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -500.0,
+        0.0,
+        -400.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:18",
+       "model": "studio:model:6f59977d5a367d5d841327af",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        500.0,
+        0.0,
+        -400.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:19",
+       "model": "studio:model:d7b58d5ff9bd68bbe98ab230",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        0.0,
+        0.0,
+        -700.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:20",
+       "model": "studio:model:5629a553bdab65f87184e290",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        -300.0,
+        0.0,
+        300.0
+       ],
+       "yaw": 16384
+      },
+      "op": "add_instance"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:21",
+       "model": "studio:model:28390b9a62c185272c0e6a86",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        300.0,
+        0.0,
+        300.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "marker": {
+       "category": "player_spawn",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:1cc859fa140f50f1ed79b31b",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "player": {
+         "evidence": "proven",
+         "meaning": "Studio format: player slot",
+         "offset": null,
+         "range": [
+          0,
+          3
+         ],
+         "type": "u8",
+         "value": 0
+        },
+        "team": {
+         "evidence": "proven",
+         "meaning": "Studio format: team",
+         "offset": null,
+         "range": [
+          0,
+          7
+         ],
+         "type": "u8",
+         "value": 0
+        }
+       },
+       "id": "user:ee5f652bd56d:22",
+       "models": [
+        "studio:model:1cc859fa140f50f1ed79b31b"
+       ],
+       "platform": "studio",
+       "restrictions": {},
+       "source": {
+        "template": "studio:template:player_spawn",
+        "user_created": true
+       },
+       "source_kind": "studio_player_spawn",
+       "translation": [
+        0.0,
+        0.0,
+        800.0
+       ],
+       "yaw": 32768
+      },
+      "op": "add_marker"
+     },
+     {
+      "instance": {
+       "category": "model",
+       "id": "user:ee5f652bd56d:23",
+       "model": "studio:model:2171b4c91176f8fe8ccf592c",
+       "source": {
+        "user_created": true
+       },
+       "translation": [
+        0.0,
+        0.0,
+        -400.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_instance"
+     },
+     {
+      "marker": {
+       "category": "objective",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:713996a74cedb4ddd52fba98",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "label": {
+         "evidence": "proven",
+         "max_length": 64,
+         "meaning": "Studio format: label shown to the player",
+         "offset": null,
+         "type": "text",
+         "value": "Destroy the depot"
+        },
+        "objective_type": {
+         "enum": {
+          "0": "destroy target",
+          "1": "reach area",
+          "2": "defend area",
+          "3": "collect"
+         },
+         "enum_closed": true,
+         "evidence": "proven",
+         "meaning": "Studio format: objective type",
+         "offset": null,
+         "range": [
+          0,
+          255
+         ],
+         "type": "u8",
+         "value": 0
+        },
+        "required": {
+         "evidence": "proven",
+         "meaning": "Studio format: count required",
+         "offset": null,
+         "range": [
+          1,
+          255
+         ],
+         "type": "u8",
+         "value": 1
+        },
+        "target": {
+         "evidence": "proven",
+         "meaning": "Studio format: record the objective refers to",
+         "offset": null,
+         "type": "ref",
+         "value": "user:ee5f652bd56d:23"
+        }
+       },
+       "id": "user:ee5f652bd56d:24",
+       "models": [
+        "studio:model:713996a74cedb4ddd52fba98"
+       ],
+       "platform": "studio",
+       "restrictions": {},
+       "source": {
+        "template": "studio:template:objective",
+        "user_created": true
+       },
+       "source_kind": "studio_objective",
+       "translation": [
+        0.0,
+        0.0,
+        -300.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_marker"
+     },
+     {
+      "marker": {
+       "category": "unit_spawner",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:1cc859fa140f50f1ed79b31b",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "max_spawned": {
+         "evidence": "proven",
+         "meaning": "Studio format: maximum alive at once",
+         "offset": null,
+         "range": [
+          1,
+          255
+         ],
+         "type": "u8",
+         "value": 4
+        },
+        "spawn_budget": {
+         "evidence": "proven",
+         "meaning": "Studio format: units to spawn",
+         "offset": null,
+         "range": [
+          0,
+          65535
+         ],
+         "sentinel": {
+          "0": "disabled",
+          "65535": "unlimited"
+         },
+         "type": "u16",
+         "value": 6
+        },
+        "spawn_interval": {
+         "evidence": "proven",
+         "meaning": "Studio format: ticks between spawns",
+         "offset": null,
+         "range": [
+          1,
+          1000000
+         ],
+         "type": "u32",
+         "value": 300
+        },
+        "team": {
+         "evidence": "proven",
+         "meaning": "Studio format: owning team",
+         "offset": null,
+         "range": [
+          0,
+          7
+         ],
+         "type": "u8",
+         "value": 1
+        },
+        "unit_type_mask": {
+         "bitmask_bits": 15,
+         "evidence": "proven",
+         "meaning": "Studio format: unit types to cycle through",
+         "offset": null,
+         "range": [
+          1,
+          32767
+         ],
+         "type": "u16",
+         "value": 1
+        }
+       },
+       "id": "user:ee5f652bd56d:25",
+       "models": [
+        "studio:model:1cc859fa140f50f1ed79b31b"
+       ],
+       "platform": "studio",
+       "restrictions": {},
+       "source": {
+        "template": "studio:template:unit_generator",
+        "user_created": true
+       },
+       "source_kind": "studio_unit_generator",
+       "translation": [
+        -600.0,
+        0.0,
+        -800.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_marker"
+     },
+     {
+      "marker": {
+       "category": "pickup",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:9b3754608175b97af151af34",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "pickup_type": {
+         "enum": {
+          "0": "repair",
+          "1": "ammunition",
+          "2": "weapon",
+          "3": "boost"
+         },
+         "enum_closed": true,
+         "evidence": "proven",
+         "meaning": "Studio format: pickup type",
+         "offset": null,
+         "range": [
+          0,
+          255
+         ],
+         "type": "u8",
+         "value": 1
+        },
+        "respawn_seconds": {
+         "evidence": "proven",
+         "meaning": "Studio format: respawn delay (0 = never)",
+         "offset": null,
+         "range": [
+          0,
+          65535
+         ],
+         "type": "u16",
+         "value": 30
+        }
+       },
+       "id": "user:ee5f652bd56d:26",
+       "models": [
+        "studio:model:9b3754608175b97af151af34"
+       ],
+       "platform": "studio",
+       "restrictions": {},
+       "source": {
+        "template": "studio:template:pickup",
+        "user_created": true
+       },
+       "source_kind": "studio_pickup",
+       "translation": [
+        400.0,
+        0.0,
+        500.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_marker"
+     },
+     {
+      "marker": {
+       "category": "hazard",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:8d8be3fe1dc62c3e570ef146",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "damage": {
+         "evidence": "proven",
+         "meaning": "Studio format: damage per second",
+         "offset": null,
+         "range": [
+          1,
+          255
+         ],
+         "type": "u8",
+         "value": 10
+        },
+        "radius": {
+         "evidence": "proven",
+         "meaning": "Studio format: damage radius",
+         "offset": null,
+         "range": [
+          1,
+          4000
+         ],
+         "type": "u16",
+         "value": 100
+        }
+       },
+       "id": "user:ee5f652bd56d:27",
+       "models": [
+        "studio:model:8d8be3fe1dc62c3e570ef146"
+       ],
+       "platform": "studio",
+       "restrictions": {},
+       "source": {
+        "template": "studio:template:hazard",
+        "user_created": true
+       },
+       "source_kind": "studio_hazard",
+       "translation": [
+        -400.0,
+        0.0,
+        100.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_marker"
+     },
+     {
+      "marker": {
+       "category": "navigation_node",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:9b3754608175b97af151af34",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "link_0": {
+         "evidence": "proven",
+         "meaning": "Studio format: linked navigation node 0",
+         "offset": null,
+         "type": "ref",
+         "value": null
+        },
+        "link_1": {
+         "evidence": "proven",
+         "meaning": "Studio format: linked navigation node 1",
+         "offset": null,
+         "type": "ref",
+         "value": null
+        },
+        "link_2": {
+         "evidence": "proven",
+         "meaning": "Studio format: linked navigation node 2",
+         "offset": null,
+         "type": "ref",
+         "value": null
+        },
+        "link_3": {
+         "evidence": "proven",
+         "meaning": "Studio format: linked navigation node 3",
+         "offset": null,
+         "type": "ref",
+         "value": null
+        }
+       },
+       "id": "user:ee5f652bd56d:28",
+       "models": [
+        "studio:model:9b3754608175b97af151af34"
+       ],
+       "platform": "studio",
+       "restrictions": {},
+       "source": {
+        "template": "studio:template:nav_node",
+        "user_created": true
+       },
+       "source_kind": "studio_nav_node",
+       "translation": [
+        0.0,
+        0.0,
+        600.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_marker"
+     },
+     {
+      "marker": {
+       "category": "navigation_node",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:9b3754608175b97af151af34",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "link_0": {
+         "evidence": "proven",
+         "meaning": "Studio format: linked navigation node 0",
+         "offset": null,
+         "type": "ref",
+         "value": null
+        },
+        "link_1": {
+         "evidence": "proven",
+         "meaning": "Studio format: linked navigation node 1",
+         "offset": null,
+         "type": "ref",
+         "value": null
+        },
+        "link_2": {
+         "evidence": "proven",
+         "meaning": "Studio format: linked navigation node 2",
+         "offset": null,
+         "type": "ref",
+         "value": null
+        },
+        "link_3": {
+         "evidence": "proven",
+         "meaning": "Studio format: linked navigation node 3",
+         "offset": null,
+         "type": "ref",
+         "value": null
+        }
+       },
+       "id": "user:ee5f652bd56d:29",
+       "models": [
+        "studio:model:9b3754608175b97af151af34"
+       ],
+       "platform": "studio",
+       "restrictions": {},
+       "source": {
+        "template": "studio:template:nav_node",
+        "user_created": true
+       },
+       "source_kind": "studio_nav_node",
+       "translation": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_marker"
+     },
+     {
+      "marker": {
+       "category": "navigation_node",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:9b3754608175b97af151af34",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "link_0": {
+         "evidence": "proven",
+         "meaning": "Studio format: linked navigation node 0",
+         "offset": null,
+         "type": "ref",
+         "value": null
+        },
+        "link_1": {
+         "evidence": "proven",
+         "meaning": "Studio format: linked navigation node 1",
+         "offset": null,
+         "type": "ref",
+         "value": null
+        },
+        "link_2": {
+         "evidence": "proven",
+         "meaning": "Studio format: linked navigation node 2",
+         "offset": null,
+         "type": "ref",
+         "value": null
+        },
+        "link_3": {
+         "evidence": "proven",
+         "meaning": "Studio format: linked navigation node 3",
+         "offset": null,
+         "type": "ref",
+         "value": null
+        }
+       },
+       "id": "user:ee5f652bd56d:30",
+       "models": [
+        "studio:model:9b3754608175b97af151af34"
+       ],
+       "platform": "studio",
+       "restrictions": {},
+       "source": {
+        "template": "studio:template:nav_node",
+        "user_created": true
+       },
+       "source_kind": "studio_nav_node",
+       "translation": [
+        0.0,
+        0.0,
+        -600.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_marker"
+     },
+     {
+      "field": "link_0",
+      "op": "set_field",
+      "target": "user:ee5f652bd56d:28",
+      "value": "user:ee5f652bd56d:29"
+     },
+     {
+      "field": "link_0",
+      "op": "set_field",
+      "target": "user:ee5f652bd56d:29",
+      "value": "user:ee5f652bd56d:30"
+     },
+     {
+      "field": "link_1",
+      "op": "set_field",
+      "target": "user:ee5f652bd56d:29",
+      "value": "user:ee5f652bd56d:28"
+     }
+    ],
+    "next_user_index": 31,
+    "platform": "studio",
+    "scene": "studio:scene:map_training_grounds",
+    "schema": "btga-overlay",
+    "schema_version": 1
+   },
+   "scene": "studio:scene:map_training_grounds",
+   "title": "Training grounds",
+   "view": {
+    "hidden": [],
+    "locked": []
+   }
+  }
+ },
+ "minigames": {
+  "target_practice": {
+   "map": "target_range",
+   "rules": {
+    "targets": 5,
+    "time_limit_seconds": 120
+   },
+   "title": "Target practice"
+  }
+ },
+ "missions": {
+  "first_strike": {
+   "briefing": "Destroy the depot at the north end of the training grounds.",
+   "map": "training_grounds",
+   "objectives": [
+    "user:ee5f652bd56d:24"
+   ],
+   "title": "First strike"
+  }
+ },
+ "multiplayer": {
+  "square_arena": {
+   "map": "arena",
+   "max_players": 4,
+   "modes": [
+    "deathmatch"
+   ],
+   "title": "Square arena"
+  }
+ },
+ "project": {
+  "description": "Original placeholder content only; no game data.",
+  "id": "5747a2e1c0ffee01",
+  "target": {
+   "game": "studio",
+   "package": "pc-port"
+  },
+  "title": "Starter example"
+ },
+ "schema": "btga-studio-project",
+ "schema_version": 2,
+ "tanks": {
+  "heavy": {
+   "model": "studio:model:abbe8b4fc9e186d61b81a6ef",
+   "stats": {
+    "armor": 140,
+    "speed": 0.7,
+    "weapon": "cannon"
+   },
+   "title": "Heavy"
+  },
+  "scout": {
+   "model": "studio:model:abbe8b4fc9e186d61b81a6ef",
+   "stats": {
+    "armor": 60,
+    "speed": 1.2,
+    "weapon": "cannon"
+   },
+   "title": "Scout"
+  }
+ }
+}

@@ -1,0 +1,3 @@
+# Windows packaging only (pinned).
+-r ../requirements.txt
+pyinstaller==6.16.0

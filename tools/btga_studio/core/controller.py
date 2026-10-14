@@ -1,0 +1,674 @@
+"""Editor controller: everything the GUI does, without the GUI.
+
+The ImGui layer reads state from here and forwards ``Command`` objects from
+gui.input; tests drive the same object headlessly.  The controller owns:
+
+* the library set: the ROM-free starter catalog, catalogs built from the
+  user's registered sources, and any catalog opened for this session;
+* the open project (``StudioProject``) and its active map document;
+* placement, selection (click, toggle, box), clipboard, view state,
+  gizmo transactions, background diagnostics, autosave and recovery;
+* the Source Manager with background, cancellable catalog builds.
+"""
+
+from __future__ import annotations
+
+import math
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+
+from . import diagnostics as diag
+from . import geometry as g
+from . import project as projects
+from .browser import AssetIndex
+from .document import EditError, EditorDocument, is_read_only
+from .library import LibrarySet
+from .scene import MeshCache, record_box
+from .settings import Settings
+
+LAYER_FAMILIES = {"geometry": "instances", "collision": "collision", "markers": "markers"}
+
+
+@dataclass
+class PlacementMode:
+    kind: str  # "model" | "marker"
+    id: str  # model id or template marker id
+    template: dict | None = None
+    yaw: int = 0
+
+
+@dataclass
+class BuildJob:
+    source_id: str
+    stage: str = "queued"
+    done: int = 0
+    total: int = 1
+    error: str | None = None
+    finished: bool = False
+    cancel: threading.Event | None = None
+
+    @property
+    def fraction(self) -> float:
+        return min(1.0, self.done / self.total) if self.total else 0.0
+
+
+class EditorController:
+    def __init__(self, settings: Settings, log=None, use_registry: bool = True, starter: bool = True):
+        self.settings = settings
+        self.preferences = settings.preferences
+        self.library: LibrarySet | None = None
+        self.catalog_path: Path | None = None
+        self.extra_catalogs: list[Path] = []
+        self.index: AssetIndex | None = None
+        self.mesh_cache: MeshCache | None = None
+        self.project: projects.StudioProject | None = None
+        self.active_map: str | None = None
+        self.camera = g.Camera(speed=self.preferences.camera_speed, look_sensitivity=self.preferences.look_sensitivity)
+        self.viewport = (1280, 720)
+        self.placement: PlacementMode | None = None
+        self.preview: dict | None = None
+        self.hover_point = None
+        self.clipboard: str | None = None
+        self.messages: list[tuple[str, str]] = []
+        self.diagnostics: list[diag.Diagnostic] = []
+        self.diagnostics_version = -1
+        self._diag_pool = ThreadPoolExecutor(max_workers=1)
+        self._diag_future = None
+        self._diag_due = None
+        self.autosaver = projects.Autosaver(settings.recovery_directory, self.preferences.autosave_enabled, self.preferences.autosave_seconds)
+        self.log_sink = log
+        self.timings: dict[str, float] = {}
+        self.registry = None
+        self.builds: dict[str, BuildJob] = {}
+        self._starter_enabled = starter
+        if use_registry:
+            from .sources import SourceRegistry
+
+            self.registry = SourceRegistry(settings.directory)
+        self._gizmo_start = None
+        self.refresh_library()
+
+    # -- messages ---------------------------------------------------------------
+    def log(self, level: str, text: str) -> None:
+        self.messages.append((level, text))
+        del self.messages[:-500]
+        if self.log_sink:
+            self.log_sink(level, text)
+
+    # -- library ----------------------------------------------------------------
+    def refresh_library(self) -> None:
+        """Rebuild the library set from the starter catalog, registered sources and session catalogs."""
+
+        from tools.btga_assets.studio import StudioLibrary
+
+        start = time.perf_counter()
+        roots = []
+        if self._starter_enabled:
+            from tools.btga_studio.content.starter import ensure_starter_catalog
+
+            roots.append(ensure_starter_catalog(self.settings.starter_directory))
+        if self.registry is not None:
+            roots += self.registry.catalog_roots()
+        roots += [r for r in self.extra_catalogs if r not in roots]
+        libraries = []
+        for root in roots:
+            try:
+                libraries.append(StudioLibrary.open(root))
+            except Exception as error:  # a broken catalog must not stop the editor
+                self.log("error", f"catalog {Path(root).name} could not be opened: {error}")
+        self.library = LibrarySet(libraries) if libraries else None
+        self.index = AssetIndex(self.library) if self.library else None
+        if self.index is not None:
+            self.index.add_templates((self.library.starter() or {}).get("templates", []))
+        self.mesh_cache = MeshCache(self.library) if self.library else None
+        if self.project is not None:
+            for entry in self.project.maps.values():
+                if entry.document is not None:
+                    entry.document.scene.library = self.library
+                    entry.document.scene.meshes = self.mesh_cache
+        self.timings["library"] = time.perf_counter() - start
+
+    def open_catalog(self, path: Path) -> None:
+        """Add a catalog for this session (for example one exported by export_neutral_assets.py)."""
+
+        path = Path(path)
+        if not (path / "catalog.json").is_file():
+            raise EditError(f"{path.name} is not a catalog folder")
+        start = time.perf_counter()
+        if path not in self.extra_catalogs:
+            self.extra_catalogs.append(path)
+        self.catalog_path = path
+        self.refresh_library()
+        self.preferences.last_catalog = str(path)
+        self.timings["catalog_open"] = time.perf_counter() - start
+        self.log("info", f"catalog opened: {len(self.library.levels())} maps, {len(self.library.models())} models")
+
+    # -- projects and maps ---------------------------------------------------------------
+    @property
+    def document(self) -> EditorDocument | None:
+        if self.project is None or self.active_map is None:
+            return None
+        entry = self.project.maps.get(self.active_map)
+        return entry.document if entry else None
+
+    def new_studio_project(self, title: str, target: str = "studio") -> projects.StudioProject:
+        self.project = projects.StudioProject(title, target)
+        self.active_map = None
+        self.log("info", f"new project {title!r}")
+        return self.project
+
+    def add_blank_map(self, key: str, title: str, half_extent: float = 2048.0) -> None:
+        if self.project is None:
+            self.new_studio_project(title)
+        self.project.add_blank_map(key, title, half_extent)
+        self.switch_map(key)
+
+    def add_imported_map(self, key: str, scene_id: str, title: str | None = None) -> None:
+        platform = scene_id.split(":", 1)[0]
+        if self.project is None:
+            self.new_studio_project(title or self.library._levels[scene_id].get("name") or scene_id,
+                                    platform if platform in projects.TARGET_GAMES else "studio")
+        self.project.add_imported_map(key, self.library, scene_id, title)
+        self.switch_map(key)
+
+    def switch_map(self, key: str) -> None:
+        start = time.perf_counter()
+        if self.document is not None and self.document.transforming:
+            self.document.cancel_transform()
+        document = self.project.open_map(key, self.library, self.mesh_cache)
+        self.active_map = key
+        self.placement = None
+        self.preview = None
+        self.index.set_map(document.scene)
+        self.frame_map()
+        self.request_diagnostics(immediate=True)
+        self.timings["map_open"] = time.perf_counter() - start
+
+    def close_map(self) -> None:
+        if self.project is not None and self.active_map is not None:
+            self.project.close_map(self.active_map)
+        self.active_map = None
+        self.placement = None
+
+    def new_project(self, level_id: str) -> None:
+        """One step: a new project with one imported map."""
+
+        self.project = None
+        self.add_imported_map("main", level_id)
+
+    def open_project(self, path: Path) -> None:
+        project = projects.load_project(Path(path))
+        self.project = project
+        self.active_map = None
+        self.preferences.add_recent(str(path))
+        for problem in project.problems(self.library):
+            self.log("warning", f"{problem['target']} ({problem['field']}): {problem['message']}")
+        for key in sorted(project.maps):
+            try:
+                self.switch_map(key)
+                break
+            except projects.ProjectMismatch as error:
+                self.log("error", str(error))
+        self.log("info", f"project opened: {Path(path).name}")
+
+    def save(self, path: Path | None = None) -> Path:
+        if self.project is None:
+            raise EditError("no open project")
+        target = Path(path) if path else self.project.path
+        if target is None:
+            raise EditError("choose a file name (Save As)")
+        self.project.compute_dependencies(self.library)
+        projects.save_project(target, self.project)
+        self.preferences.add_recent(str(target))
+        self.autosaver.discard(self.project)
+        self.log("info", f"saved {target.name}")
+        return target
+
+    @property
+    def project_path(self) -> Path | None:
+        return self.project.path if self.project else None
+
+    @property
+    def dirty(self) -> bool:
+        return self.project is not None and self.project.dirty
+
+    def recoveries(self) -> list[dict]:
+        return self.autosaver.recoveries()
+
+    def restore_recovery(self, path: Path) -> None:
+        project = projects.load_project(Path(path))
+        project.saved_text = None  # recovered work stays unsaved until the user saves it
+        project.path = None
+        self.project = project
+        self.active_map = None
+        for key in sorted(project.maps):
+            try:
+                self.switch_map(key)
+                break
+            except projects.ProjectMismatch as error:
+                self.log("error", str(error))
+        self.log("info", "recovered unsaved work; choose Save As to keep it")
+
+    # -- camera ------------------------------------------------------------------
+    def frame_map(self) -> None:
+        if self.document:
+            self.camera.frame(*self.document.scene.world_bounds())
+            self.preferences.camera_speed = self.camera.speed
+
+    def frame_selection(self) -> None:
+        document = self.document
+        if not document or not document.selection:
+            return
+        boxes = [document.scene.record_world_box(i) for i in document.selection if document.scene.record(i)]
+        if boxes:
+            lo = np.min([b[0] for b in boxes], axis=0)
+            hi = np.max([b[1] for b in boxes], axis=0)
+            pad = np.array([64.0, 64.0, 64.0])
+            self.camera.frame(lo - pad, hi + pad)
+
+    def frame_record(self, record_id: str) -> None:
+        if self.document and self.document.scene.record(record_id):
+            self.document.hidden.discard(record_id)
+            self.document.select(record_id)
+            self.frame_selection()
+
+    # -- picking and selection ----------------------------------------------------------
+    def pick_layers(self) -> set[str]:
+        layers = self.preferences.layers
+        return {family for layer, family in LAYER_FAMILIES.items() if layers.get(layer, True)}
+
+    def ray(self, x: float, y: float) -> g.Ray:
+        return g.screen_ray(self.camera, x, y, *self.viewport)
+
+    def _pickable(self, record_id: str) -> bool:
+        document = self.document
+        if record_id in document.hidden or record_id in document.locked:
+            return False
+        if not self.preferences.layers.get("unresolved", True) and is_read_only(document.scene.record(record_id)[1]):
+            return False
+        return True
+
+    def pick(self, x: float, y: float):
+        start = time.perf_counter()
+        hits = [h for h in self.document.scene.pick(self.ray(x, y), self.pick_layers(), limit=16) if self._pickable(h.id)]
+        self.timings["pick"] = time.perf_counter() - start
+        return hits
+
+    def click(self, x: float, y: float, toggle: bool = False) -> None:
+        if self.document is None:
+            return
+        if self.placement is not None:
+            self.place_at(x, y)
+            return
+        hits = self.pick(x, y)
+        self.document.select(hits[0].id if hits else None, toggle)
+
+    def box_select(self, rect, add: bool = False) -> list[str]:
+        """Select every visible, unlocked record whose centre projects inside the screen rectangle."""
+
+        document = self.document
+        if document is None:
+            return []
+        x0, x1 = sorted((rect[0], rect[2]))
+        y0, y1 = sorted((rect[1], rect[3]))
+        families = self.pick_layers()
+        chosen = []
+        for family, record in document.scene.records():
+            if family not in families or not self._pickable(record["id"]):
+                continue
+            lo, hi = document.scene.record_world_box(record["id"])
+            projected = g.project(self.camera, (lo + hi) / 2, *self.viewport)
+            if projected and x0 <= projected[0] <= x1 and y0 <= projected[1] <= y1:
+                chosen.append(record["id"])
+        document.selection = sorted(set(document.selection) | set(chosen)) if add else chosen
+        return chosen
+
+    def select_all(self) -> None:
+        if self.document:
+            families = self.pick_layers()
+            self.document.selection = [r["id"] for f, r in self.document.scene.records() if f in families and self._pickable(r["id"])]
+
+    # -- placement ------------------------------------------------------------------------
+    def template(self, template_id: str) -> dict | None:
+        entry = self.document.scene.record(template_id) if self.document else None
+        if entry is not None:
+            return entry[1]
+        return self.index.templates.get(template_id) if self.index else None
+
+    def begin_placement(self, kind: str, resource_id: str) -> None:
+        if self.document is None:
+            raise EditError("open a map first")
+        template = None
+        if kind == "marker":
+            template = self.template(resource_id)
+            if template is None:
+                raise EditError("template not available in this map or the starter set")
+            reason = is_read_only(template)
+            if reason:
+                raise EditError(f"cannot place this record: {reason}")
+        elif resource_id not in self.library._models:
+            raise EditError("model not in any loaded catalog")
+        self.placement = PlacementMode(kind, resource_id, template)
+
+    def cancel(self) -> None:
+        if self.document and self.document.transforming:
+            self.document.cancel_transform()
+        self.placement = None
+        self.preview = None
+
+    def placement_point(self, x: float, y: float):
+        exclude = set(self.document.selection)
+        found = self.document.scene.surface_point(self.ray(x, y), exclude) if self.preferences.surface_snap else None
+        if found is None:
+            point = g.ray_plane_y(self.ray(x, y), 0.0)
+            found = (point, None) if point is not None else None
+        if found is None:
+            return None
+        point, _ = found
+        grid = self.preferences.grid_snap
+        return np.array([g.snap(point[0], grid), point[1], g.snap(point[2], grid)])
+
+    def hover(self, x: float, y: float) -> None:
+        if self.document is None:
+            self.preview = None
+            return
+        self.hover_point = self.placement_point(x, y)
+        if self.placement is None:
+            self.preview = None
+            return
+        point = self.hover_point
+        if point is None:
+            self.preview = None
+            return
+        if self.placement.kind == "model":
+            mesh = self.document.scene.meshes.get(self.placement.id)
+            lo, hi = mesh.lo, mesh.hi
+        else:
+            lo, hi = record_box(self.placement.template, "markers", None)
+        bounds = self.document.scene.bounds
+        inside = not bounds or (bounds["x"][0] <= point[0] <= bounds["x"][1] and bounds["z"][0] <= point[2] <= bounds["z"][1])
+        self.preview = {"translation": [float(v) for v in point], "yaw": self.placement.yaw, "lo": list(map(float, lo)),
+                        "hi": list(map(float, hi)), "valid": inside}
+
+    def place_at(self, x: float, y: float) -> str | None:
+        point = self.placement_point(x, y)
+        if point is None:
+            self.log("warning", "no surface under the cursor")
+            return None
+        yaw = g.snap_yaw(self.placement.yaw, self.preferences.yaw_snap_degrees)
+        try:
+            if self.placement.kind == "model":
+                new_id = self.document.place_model(self.placement.id, point, yaw)
+            else:
+                new_id = self.document.place_marker(self.placement.template, point, yaw)
+        except EditError as error:
+            self.log("error", f"placement refused: {error}")
+            return None
+        if self.document.family(new_id) == "markers" and not self._collision_known():
+            self.log("warning", "collision on this map is planar or unknown; the placed object has no proven collision height")
+        self.request_diagnostics()
+        return new_id
+
+    def _collision_known(self) -> bool:
+        return any(r.get("vertical", {}).get("status") == "proven" for _, r in self.document.scene.records("collision"))
+
+    # -- edits ----------------------------------------------------------------------
+    def run(self, label: str, action, *args, **kwargs):
+        if self.document is None:
+            return None
+        start = time.perf_counter()
+        try:
+            result = action(*args, **kwargs)
+        except EditError as error:
+            self.log("error", f"{label}: {error}")
+            return None
+        self.timings[label] = time.perf_counter() - start
+        self.request_diagnostics()
+        return result
+
+    def undo(self):
+        return self.run("undo", self.document.undo) if self.document else None
+
+    def redo(self):
+        return self.run("redo", self.document.redo) if self.document else None
+
+    def duplicate(self):
+        return self.run("duplicate", self.document.duplicate) if self.document and self.document.selection else None
+
+    def delete(self):
+        return self.run("delete", self.document.delete) if self.document and self.document.selection else None
+
+    def copy(self) -> str | None:
+        if not self.document or not self.document.selection:
+            return None
+        try:
+            self.clipboard = self.document.copy()
+        except EditError as error:
+            self.log("error", f"copy: {error}")
+            return None
+        self.log("info", f"copied {len(self.document.selection)} object(s)")
+        return self.clipboard
+
+    def paste(self, text: str | None = None):
+        text = text or self.clipboard
+        if not text or not self.document:
+            return None
+        return self.run("paste", self.document.paste, text, self.hover_point)
+
+    # -- gizmo --------------------------------------------------------------------------
+    def gizmo_matrix(self) -> np.ndarray | None:
+        document = self.document
+        if not document or not document.selection:
+            return None
+        first = document.record(document.selection[0])
+        pivot = np.mean([document.record(i)["translation"] for i in document.selection], axis=0)
+        single = len(document.selection) == 1
+        return g.model_matrix(pivot, first["yaw"] if single else 0, first.get("scale") if single else None)
+
+    def gizmo_begin(self, duplicate: bool = False) -> bool:
+        try:
+            if duplicate:
+                self.document.duplicate(offset=(0.0, 0.0, 0.0))
+            self.document.begin_transform()
+        except EditError as error:
+            self.log("error", f"transform: {error}")
+            return False
+        self._gizmo_start = self.gizmo_matrix()
+        return True
+
+    def gizmo_update(self, matrix: np.ndarray, scale_mode: bool = False) -> None:
+        """Feed the manipulated matrix: translation, yaw and (scale mode) scale relative to the drag start."""
+
+        start = self._gizmo_start
+        delta = matrix[:3, 3] - start[:3, 3]
+        yaw0 = math.atan2(start[0, 2], start[0, 0])
+        yaw1 = math.atan2(matrix[0, 2], matrix[0, 0])
+        yaw_delta = g.yaw_units(yaw1 - yaw0)
+        if self.preferences.yaw_snap_degrees:
+            yaw_delta = g.snap_yaw(yaw_delta, self.preferences.yaw_snap_degrees)
+        if self.preferences.grid_snap:
+            delta = np.array([g.snap(delta[0], self.preferences.grid_snap), delta[1], g.snap(delta[2], self.preferences.grid_snap)])
+        scale = None
+        if scale_mode:
+            before = np.linalg.norm(start[:3, :3], axis=0)
+            after = np.linalg.norm(matrix[:3, :3], axis=0)
+            scale = after / np.where(before == 0, 1, before)
+        try:
+            self.document.update_transform(delta, yaw_delta, scale)
+        except EditError as error:
+            self.log("warning", str(error))
+
+    def gizmo_end(self) -> None:
+        try:
+            self.document.commit_transform()
+        except EditError as error:
+            self.log("error", f"transform refused: {error}")
+        self.request_diagnostics()
+
+    # -- commands -------------------------------------------------------------------------
+    def execute(self, command) -> None:
+        name, args = command.name, command.args
+        document = self.document
+        if name == "look":
+            dy = -args["dy"] if self.preferences.invert_look_y else args["dy"]
+            self.camera.look_sensitivity = self.preferences.look_sensitivity
+            self.camera.look(args["dx"], dy)
+        elif name == "move":
+            self.camera.move(args["dt"], args["forward"], args["strafe"], args["vertical"], args["fast"])
+        elif name == "speed":
+            self.camera.adjust_speed(args["steps"])
+            self.preferences.camera_speed = self.camera.speed
+        elif name == "frame_selection":
+            self.frame_selection()
+        elif name == "frame_map":
+            self.frame_map()
+        elif name == "cancel":
+            self.cancel()
+        elif name == "click":
+            self.click(args["x"], args["y"], args.get("toggle", False))
+        elif name == "box_select":
+            self.box_select(args["rect"], args.get("add", False))
+        elif name in ("undo", "redo", "duplicate", "delete", "copy", "paste", "select_all"):
+            getattr(self, name)()
+        elif name in ("hide", "isolate", "lock", "unhide_all") and document is not None:
+            getattr(document, name)()
+        elif name == "save" and self.project_path:
+            self.save()
+
+    # -- diagnostics -------------------------------------------------------------------------
+    def request_diagnostics(self, immediate: bool = False) -> None:
+        self._diag_due = time.monotonic() + (0.0 if immediate else 0.4)
+
+    def poll_diagnostics(self, wait: bool = False) -> bool:
+        document = self.document
+        changed = False
+        if self._diag_future is not None and (wait or self._diag_future.done()):
+            version, result = self._diag_future.result()
+            self._diag_future = None
+            if document is not None and version == document.scene.version:
+                self.diagnostics = result + self.project_diagnostics()
+                self.diagnostics_version = version
+                changed = True
+            else:
+                self._diag_due = time.monotonic()
+        if document is not None and self._diag_future is None and self._diag_due is not None and time.monotonic() >= self._diag_due:
+            self._diag_due = None
+            version = document.scene.version
+            snapshot = _Snapshot(document)
+            library = self.library
+            self._diag_future = self._diag_pool.submit(lambda: (version, diag.collect(snapshot, library)))
+            if wait:
+                return self.poll_diagnostics(wait=True) or changed
+        return changed
+
+    def project_diagnostics(self) -> list[diag.Diagnostic]:
+        if self.project is None:
+            return []
+        return [diag.Diagnostic("error", p["code"], p["message"], p["target"], p["field"]) for p in self.project.problems(self.library)]
+
+    # -- sources --------------------------------------------------------------------------
+    def add_source(self, path: Path):
+        from .sources import SourceError
+
+        try:
+            source = self.registry.register(Path(path))
+        except SourceError as error:
+            self.log("error", str(error))
+            return None
+        self.log("info", f"registered {source.title} ({source.status})")
+        return source
+
+    def build_catalog(self, source_id: str, wait: bool = False) -> BuildJob:
+        """Build a source's catalog on a background thread; the job reports progress and can be cancelled."""
+
+        from .sources import Cancelled
+
+        job = BuildJob(source_id, cancel=threading.Event())
+        self.builds[source_id] = job
+
+        def progress(stage, done, total):
+            job.stage, job.done, job.total = stage, done, total or 1
+
+        def work():
+            try:
+                self.registry.build_catalog(source_id, progress, job.cancel)
+                job.stage = "done"
+            except Cancelled:
+                job.stage, job.error = "cancelled", "cancelled"
+            except Exception as error:
+                job.stage, job.error = "failed", f"{type(error).__name__}: {error}"
+            finally:
+                job.finished = True
+
+        thread = threading.Thread(target=work, name=f"catalog-{source_id}", daemon=True)
+        thread.start()
+        if wait:
+            thread.join()
+            self.finish_builds()
+        return job
+
+    def finish_builds(self) -> None:
+        """Pick up finished builds (called each frame) and refresh the library once."""
+
+        finished = [job for job in self.builds.values() if job.finished]
+        if not finished:
+            return
+        for job in finished:
+            del self.builds[job.source_id]
+            if job.error:
+                self.log("error" if job.stage == "failed" else "warning", f"catalog build {job.source_id}: {job.error}")
+            else:
+                self.log("info", f"catalog built for {job.source_id}")
+        self.refresh_library()
+
+    def tick(self) -> None:
+        self.autosaver.enabled = self.preferences.autosave_enabled
+        self.autosaver.interval = self.preferences.autosave_seconds
+        if self.project is not None:
+            try:
+                path = self.autosaver.tick(self.project)
+            except Exception as error:
+                self.log("error", f"autosave failed: {error}")
+                path = None
+            if path:
+                self.log("info", "recovery copy written")
+        self.finish_builds()
+        self.poll_diagnostics()
+
+    def shutdown(self) -> None:
+        for job in self.builds.values():
+            if job.cancel:
+                job.cancel.set()
+        self._diag_pool.shutdown(wait=False, cancel_futures=True)
+
+
+class _Snapshot:
+    """An immutable view of a document for background validation."""
+
+    def __init__(self, document: EditorDocument):
+        from tools.btga_assets import overlay as overlay_module
+
+        self.overlay = overlay_module.Overlay.from_json(document.overlay.to_json())
+        self.scene = _SceneSnapshot(document.scene)
+
+
+class _SceneSnapshot:
+    def __init__(self, scene):
+        self.base = scene.base
+        self._view = {k: (f, r) for k, (f, r) in scene.view.items()}
+        self._order = list(scene.order)
+        self.navigation = scene.navigation
+
+    def records(self, family=None):
+        for record_id in self._order:
+            entry = self._view.get(record_id)
+            if entry and (family is None or entry[0] == family):
+                yield entry
+
+    def record(self, record_id):
+        return self._view.get(record_id)

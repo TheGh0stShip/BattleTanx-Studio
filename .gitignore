@@ -1,0 +1,53 @@
+# Private game data and extracted/generated assets
+*.z64
+*.n64
+*.v64
+*.iso
+*.cue
+*.chd
+*.rom
+*.glb
+*.gltf
+*.png
+*.bmp
+*.tga
+*.zip
+private-work/
+baseroms/
+extracted/
+exports/
+previews/
+local-data/
+samples/
+
+# Python and test outputs
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Editor/build outputs
+build/
+dist/
+*.spec.tmp
+*.exe
+*.dll
+*.pdb
+*.log
+
+# Local projects, settings, and overlays
+*.btgaproj
+*.btga-overlay.json
+.btga-studio/
+
+# IDE and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# The ROM-free example project is original content and is versioned.
+!examples/starter-example.btgaproj

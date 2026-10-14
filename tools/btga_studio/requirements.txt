@@ -1,0 +1,5 @@
+# BTGA Studio editor runtime (pinned).  Install into a virtual environment:
+#   python -m pip install -r tools/btga_studio/requirements.txt
+imgui-bundle==1.92.900
+numpy==2.5.4
+PyOpenGL==3.1.10
