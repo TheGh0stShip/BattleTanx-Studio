@@ -32,7 +32,7 @@ from tools.btga_studio.core import desktop, hub
 from tools.btga_studio.gui.input import BINDABLE_KEYS, DEFAULT_BINDINGS, InputState, commands, validate_bindings
 from tools.btga_studio.gui import fonts
 from tools.btga_studio.gui.help import TOPICS as HELP_TOPICS
-from tools.btga_studio.gui.windows import ProductUI, friendly_ids
+from tools.btga_studio.gui.windows import ProductUI, friendly_ids, tooltip
 
 gizmo = imguizmo.im_guizmo
 PROJECT_FILTER = ["BattleTanx Studio project", "*.btgaproj"]
@@ -261,6 +261,8 @@ class StudioApp(ProductUI):
             imgui.separator()
             if imgui.menu_item("Source Manager...", "", False)[0]:
                 self.show_sources = True
+            if imgui.menu_item("Import models and textures...", "", False)[0]:
+                self.open_import()
             if imgui.begin_menu("Developer"):
                 imgui.text_disabled("For working with exported catalog folders")
                 if imgui.menu_item("Open catalog folder...", "", False)[0]:
@@ -1084,6 +1086,10 @@ class StudioApp(ProductUI):
         _, self.map_only = imgui.checkbox("This map", self.map_only)
         imgui.same_line()
         _, self.thumbnail_mode = imgui.checkbox("Thumbnails", self.thumbnail_mode)
+        imgui.same_line()
+        if imgui.small_button("Import..."):
+            self.open_import()
+        tooltip("Add your own models and pictures (OBJ, glTF, PNG, JPEG, BMP, TGA).")
         for label, attribute, options in (("Game", "filter_platform", [None] + sorted(GAMES)),
                                           ("Kind", "filter_kind", [None, "model", "texture", "gameplay", "environment"]),
                                           ("Category", "filter_category", [None] + c.index.categories())):
@@ -1140,7 +1146,8 @@ class StudioApp(ProductUI):
                         if imgui.menu_item("Copy ID", "", False)[0]:
                             imgui.set_clipboard_text(entry.id)
                         imgui.end_popup()
-                    origin = {"starter": "Studio starter", "user": "Placed in this map", "source": "Your game" if entry.platform != "studio" else "Studio starter"}
+                    origin = {"starter": "Studio starter", "user": "Placed in this map",
+                              "source": {"studio": "Studio starter", "user": "Imported by you"}.get(entry.platform, "Your game")}
                     placeable = ("Yes" if entry.editable and entry.kind in ("model", "gameplay") else
                                  ("Read-only: " + (entry.detail or "not decoded") if not entry.editable else "Shown for reference"))
                     for value in ({"model": "Model", "gameplay": "Gameplay object", "texture": "Texture", "environment": "Environment"}.get(entry.kind, entry.kind),
@@ -1398,6 +1405,7 @@ class StudioApp(ProductUI):
         self.window_new_project()
         self.window_new_map()
         self.window_source_manager()
+        self.window_import()
         self.window_hub()
         self.window_wizard()
         self.window_gameplay()

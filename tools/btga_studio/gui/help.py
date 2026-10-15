@@ -46,4 +46,26 @@ Keyboard shortcuts never fire while you are typing in a text box."""),
     ("Reporting a problem", """\
 Help > Report a problem saves a short report (version, system and recent log messages, with your folder names
 removed) and opens the project's issue page, where you can attach it. Help > Open logs folder shows the logs."""),
+    ("Importing models, pictures and real places", """\
+File > Import models and textures (or Import... above the Assets panel) brings in your own work and anything
+you are allowed to use, such as public-domain or Creative Commons collections:
+
+- Models: OBJ (keep its .mtl file and pictures next to it) and glTF / GLB. Other 3D formats (FBX, 3DS, BLEND,
+  DAE) can be saved as glTF from Blender (File > Export > glTF 2.0).
+- Pictures: PNG, JPEG, BMP and TGA. A picture can stay a texture or become a ground tile, an upright panel,
+  a box, or a sky panorama all around the map (choose it under Gameplay editor > Map > Sky panorama).
+
+Studio checks each file first and explains any problem. Fill in "Credit and licence" so everyone who plays
+your package can see who made it. Your imports appear in the Assets panel under "Imported: <group>". A
+model's base sits on the ground; one metre is about 16 Studio units. Right-click a placed model and choose
+"Make solid" to give it a collision box.
+
+"Build a city from OpenStreetMap" turns a map area exported from openstreetmap.org into a playable map at real
+scale: buildings with their heights, roads, rivers, parks, bridges, skyways and trees. Add a folder of
+elevation tiles for real hills. Detail: High adds windows that match the real floors, roof parapets, gabled roofs,
+street lamps, traffic signals, walls, fences, crosswalks and more trees, at the cost of a larger package.
+The map data credit is added for you.
+
+Projects that use imports need them on the computer that opens them. Packages carry them: Import window >
+Your imported library > Add from a content package."""),
 )

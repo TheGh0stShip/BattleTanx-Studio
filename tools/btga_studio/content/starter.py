@@ -26,13 +26,14 @@ from tools.btga_assets import export as ex  # noqa: E402
 from tools.btga_assets import mesh as meshmod  # noqa: E402
 from tools.btga_assets.semantics import SCENE_SCHEMA_VERSION, field, marker  # noqa: E402
 
-STARTER_VERSION = 1
+STARTER_VERSION = 2  # 2 added the teleporter templates and their marker models
+ID_VERSION = 1  # content IDs keep the version-1 seed, so existing projects still resolve every starter model and texture
 PLATFORM = "studio"
 
 
 def content_id(kind: str, payload) -> str:
     text = json.dumps(payload, sort_keys=True, separators=(",", ":"))
-    return f"studio:{kind}:{hashlib.sha256(f'starter{STARTER_VERSION}|{kind}|{text}'.encode()).hexdigest()[:24]}"
+    return f"studio:{kind}:{hashlib.sha256(f'starter{ID_VERSION}|{kind}|{text}'.encode()).hexdigest()[:24]}"
 
 
 # ------------------------------------------------------------------ textures --
@@ -170,6 +171,13 @@ def starter_meshes(textures: dict[str, dict]) -> dict[str, tuple[dict, str]]:
     spawn = _merge(_builder_from_quads(_box_quads((-30, 0, -30), (30, 6, 30)), t["solid_blue"]), _pyramid(14, 60, t["solid_blue"]))
     pickup = _merge(_pyramid(24, 30, t["solid_orange"]))
     hazard = _merge(_builder_from_quads(_box_quads((-40, 0, -40), (40, 10, 40)), t["solid_red"]), _pyramid(20, 70, t["solid_red"]))
+    teleporter = _merge(_builder_from_quads(_box_quads((-60, 0, -60), (60, 4, 60)), t["solid_purple"]),
+                        _builder_from_quads(_box_quads((-40, 4, -40), (40, 8, 40)), t["solid_white"]),
+                        *[_builder_from_quads(_box_quads((x - 5, 0, z - 5), (x + 5, 90, z + 5)), t["solid_purple"])
+                          for x, z in ((-55, -55), (55, -55), (55, 55), (-55, 55))])
+    teleport_exit = _merge(_builder_from_quads(_box_quads((-40, 0, -40), (40, 4, 40)), t["solid_purple"]),
+                           _builder_from_quads([([(-25, 6, 20), (25, 6, 20), (0, 6, -45), (0, 6, -45)], [(0, 0), (1, 0), (0.5, 1), (0.5, 1)])],
+                                               t["solid_white"], True))
     tank = _merge(_builder_from_quads(_box_quads((-35, 0, -55), (35, 30, 55)), t["checker_grey"]),
                   _builder_from_quads(_box_quads((-22, 30, -20), (22, 50, 22)), t["concrete"]),
                   _builder_from_quads(_box_quads((-4, 38, -90), (4, 44, -20)), t["concrete"]))
@@ -187,6 +195,8 @@ def starter_meshes(textures: dict[str, dict]) -> dict[str, tuple[dict, str]]:
         "marker_hazard": (hazard, "Markers"),
         "marker_objective": (flag, "Markers"),
         "tank_placeholder": (tank, "Vehicles"),
+        "marker_teleporter": (teleporter, "Markers"),
+        "marker_teleport_exit": (teleport_exit, "Markers"),
     }
 
 
@@ -242,6 +252,14 @@ def gameplay_templates(models: dict[str, dict]) -> list[dict]:
             "required": _studio(1, "u8", "count required", legal=(1, 255)),
             "label": _studio("Objective", "text", "label shown to the player", legal=(0, 64)),
         }, "marker_objective"),
+        template("teleporter", "teleporter", {
+            "exit": _studio(None, "ref", "teleport exit vehicles arrive at"),
+            "radius": _studio(90, "u16", "trigger radius", legal=(20, 1000)),
+            "cooldown_seconds": _studio(2, "u8", "seconds before the same vehicle can use it again", legal=(0, 60)),
+            "keep_speed": _studio(0, "u8", "speed after arriving", enum={0: "stop at the exit", 1: "keep speed"}, closed=True),
+        }, "marker_teleporter"),
+        template("teleport_exit", "teleport_exit", {"label": _studio("Teleport exit", "text", "name shown in the editor", legal=(0, 64))},
+                 "marker_teleport_exit"),
         template("nav_node", "navigation_node", {f"link_{i}": _studio(None, "ref", f"linked navigation node {i}") for i in range(4)}, "marker_pickup"),
     ]
 

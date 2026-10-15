@@ -38,11 +38,18 @@ own, open File > Source Manager and add your copy:
 Studio checks the copy, reads it only on this computer, and never copies it
 into projects or exported packages. No game data is included in this download.
 
+Your own models, pictures and real places
+-----------------------------------------
+File > Import models and textures brings in OBJ and glTF models and PNG,
+JPEG, BMP and TGA pictures, and can build a city from OpenStreetMap data.
+See Help > Importing models, pictures and real places.
+
 Where things are kept
 ---------------------
 - Your projects: where you save them (default: Documents\BattleTanx Studio Projects)
 - Settings: %APPDATA%\BattleTanx Studio
-- Catalogs, thumbnails, recovery copies and logs: %LOCALAPPDATA%\BattleTanx Studio
+- Catalogs, your imported library, thumbnails, recovery copies and logs:
+  %LOCALAPPDATA%\BattleTanx Studio
 Tools > Settings shows these folders and can open them.
 
 Portable use: put an empty file named portable.txt next to

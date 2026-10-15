@@ -8,8 +8,13 @@ byte-identical packages on every platform.  Layout:
     manifest.json                schema, versions, project identity, source hashes, file list with SHA-256
     project.json                 metadata, campaigns, missions, multiplayer, minigames, tanks, gangs
     maps/<key>.json              one per map (see MAP CONTRACT in docs/CONTENT_PACKAGE.md)
-    resources/models/<id>.json   Studio-original models used by the package (neutral mesh)
-    resources/textures/<id>.rgba Studio-original textures: u16 width, u16 height (LE), RGBA8 rows
+    resources/models/<id>.json   Studio-original and user-imported models used by the package (neutral mesh)
+    resources/textures/<id>.rgba Studio-original and user-imported textures: u16 width, u16 height (LE), RGBA8 rows
+
+User-imported resources (``user:`` IDs, see ``core.imports``) travel with
+their credit and licence text, listed in the manifest under ``credits``;
+``user_textures`` keeps their labels, wrap modes and sky layout so another
+computer can restore them into its library.
 
 Game-derived models and textures are referenced by content ID only; the
 runtime resolves them from its own locally extracted data and checks the
@@ -36,7 +41,7 @@ from .project import PROJECT_VERSION, StudioProject
 
 PACKAGE_SCHEMA = "btga-content-package"
 PACKAGE_VERSION = 1
-STARTER_PLATFORMS = ("studio",)
+STARTER_PLATFORMS = ("studio", "user")  # resources embedded in packages (Studio-original and user-imported)
 LIMITS = {"package_bytes": 256 * 1024 * 1024, "file_bytes": 64 * 1024 * 1024, "files": 20_000, "maps": 256, "records_per_map": 200_000}
 TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 SAFE_NAME = re.compile(r"^(manifest\.json|project\.json|maps/[a-z0-9_]{1,48}\.json|resources/(models|textures)/[a-z0-9_]{1,128}\.(json|rgba))$")
@@ -58,6 +63,12 @@ class PackageReport:
 
 def _json(data) -> bytes:
     return (json.dumps(data, sort_keys=True, indent=1, ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")
+
+
+def _compact(data) -> bytes:
+    """Map documents and model resources: the same deterministic JSON without indentation (a city is mostly numbers)."""
+
+    return (json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")
 
 
 def _stem(identifier: str) -> str:
@@ -168,20 +179,35 @@ def build_package(project: StudioProject, library, studio_version: str = "0") ->
         document = project.open_map(key, library)
         data, used = _map_document(key, entry, document, library)
         models_used |= used
-        files[f"maps/{key}.json"] = _json(data)
+        files[f"maps/{key}.json"] = _compact(data)
     for tank in project.tanks.values():
         if isinstance(tank.get("model"), str):
             models_used.add(tank["model"])
     textures_used = set()
+    credits = []
+    for key, entry in sorted(project.maps.items()):
+        sky = (entry.base or {}).get("environment", [{}])[0].get("sky") if entry.kind == "blank" and entry.base else None
+        if sky:
+            textures_used.add(sky["texture"])
     for model_id in sorted(models_used):
         if not model_id.startswith(tuple(f"{p}:" for p in STARTER_PLATFORMS)) or model_id not in library._models:
             continue
         model = library.model(model_id)
-        files[f"resources/models/{_stem(model_id)}.json"] = _json({"id": model_id, "mesh": model.mesh, "bounds": model.bounds})
+        resource = {"id": model_id, "mesh": model.mesh, "bounds": model.bounds}
+        if model_id.startswith("user:"):
+            resource["source"] = model.provenance
+            credits.append(_credit(model_id, model.provenance))
+        files[f"resources/models/{_stem(model_id)}.json"] = _compact(resource)
         textures_used |= {m.get("texture") for m in model.mesh["materials"] if m.get("texture")}
+    user_textures = []
     for texture_id in sorted(textures_used):
         texture = library.texture(texture_id)
         files[f"resources/textures/{_stem(texture_id)}.rgba"] = struct.pack("<HH", texture.width, texture.height) + texture.rgba
+        if texture_id.startswith("user:"):
+            meta = library._textures[texture_id]
+            user_textures.append({"id": texture_id, "label": meta.get("label"), "wrap": meta.get("wrap"), "source": meta.get("source"),
+                                  **({"sky": meta["sky"]} if meta.get("sky") else {})})
+            credits.append(_credit(texture_id, meta.get("source") or {}))
     meta = project.as_dict()
     files["project.json"] = _json({"project": meta["project"], "campaigns": meta["campaigns"], "missions": meta["missions"],
                                    "multiplayer": meta["multiplayer"], "minigames": meta["minigames"], "tanks": meta["tanks"],
@@ -199,8 +225,17 @@ def build_package(project: StudioProject, library, studio_version: str = "0") ->
         "files": [{"path": name, "sha256": hashlib.sha256(data).hexdigest(), "size": len(data)} for name, data in sorted(files.items())],
         "warnings": report.warnings,
     }
+    if credits:
+        manifest["credits"] = sorted(credits, key=lambda c: c["id"])
+        manifest["user_textures"] = user_textures
     files["manifest.json"] = _json(manifest)
     return _zip(files)
+
+
+def _credit(identifier: str, source: dict) -> dict:
+    origin = source.get("import") or {}
+    return {"id": identifier, "label": source.get("label"), "file": origin.get("file"), "sha256": origin.get("sha256"),
+            "credit": origin.get("credit", "")}
 
 
 def _zip(files: dict[str, bytes]) -> bytes:
@@ -339,6 +374,12 @@ def read_package(data: bytes) -> Package:
             textures[name.rsplit("/", 1)[1][:-5]] = (width, height, content[4:])
     for key, map_data in sorted(maps.items()):
         _check_map(key, map_data, models)
+        environment = map_data.get("environment") or []
+        sky = environment[0].get("sky") if isinstance(environment, list) and environment and isinstance(environment[0], dict) else None
+        if sky is not None:
+            texture = sky.get("texture") if isinstance(sky, dict) else None
+            if not isinstance(texture, str) or (texture.startswith(tuple(f"{p}:" for p in STARTER_PLATFORMS)) and _stem(texture) not in textures):
+                raise PackageError(f"map {key}: field sky: missing dependency {texture}")
     for model_id, model in sorted(models.items()):
         materials = model["mesh"].get("materials", [])
         if not isinstance(materials, list):

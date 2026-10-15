@@ -21,6 +21,7 @@ import numpy as np
 from OpenGL import GL as gl
 
 from tools.btga_studio.core import geometry as g
+from tools.btga_studio.core import sky as sky_module
 from tools.btga_studio.core.scene import MARKER_HALF, EditorScene, record_box
 
 VERTEX_SHADER = """
@@ -429,6 +430,9 @@ class ViewportRenderer:
         gl.glPolygonOffset(1.0, 2.0)  # filled surfaces sit behind coincident overlay lines
         if self.wireframe:
             gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE)
+        sky = self.sky_record()
+        if sky and isinstance(camera, g.Camera) and self.layers.get("geometry", True):
+            self._draw_sky(sky, camera)
         if self.layers.get("geometry", True):
             for batch in self.batches:
                 gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture(batch.texture))
@@ -464,6 +468,38 @@ class ViewportRenderer:
         self.draw_calls += 1
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
         return self.colour
+
+    def sky_record(self) -> dict | None:
+        environment = (self.scene.base.get("environment") or [{}]) if self.scene else [{}]
+        sky = environment[0].get("sky") if environment and isinstance(environment[0], dict) else None
+        return sky if sky and sky.get("texture") in getattr(self.library, "_textures", {}) else None
+
+    def _draw_sky(self, sky: dict, camera) -> None:
+        """The panorama band around the camera, behind everything and without fog."""
+
+        radius = float(camera.far) * 0.45
+        key = (tuple(sorted(sky.items())), radius)
+        if getattr(self, "_sky_key", None) != key:
+            if getattr(self, "_sky_batch", None) is not None:
+                self._sky_batch.delete()
+            self._sky_batch = Batch(sky["texture"], sky_module.vertices(sky, radius))
+            self._sky_key = key
+            gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture(sky["texture"]))
+            gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR)
+            gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+            gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_REPEAT)
+        gl.glUniformMatrix4fv(self.uniforms["model"], 1, True, g.model_matrix(tuple(camera.position), 0).astype(np.float32))
+        gl.glUniform1f(self.uniforms["fog_far"], 1e12)
+        gl.glUniform1i(self.uniforms["textured"], 1)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture(sky["texture"]))
+        gl.glDepthMask(gl.GL_FALSE)
+        gl.glDisable(gl.GL_DEPTH_TEST)
+        self._sky_batch.draw()
+        self.draw_calls += 1
+        gl.glEnable(gl.GL_DEPTH_TEST)
+        gl.glDepthMask(gl.GL_TRUE)
+        gl.glUniform1f(self.uniforms["fog_far"], float(camera.far))
+        gl.glUniformMatrix4fv(self.uniforms["model"], 1, True, np.identity(4, dtype=np.float32))
 
     def use_target(self, name: str) -> None:
         """Switch between named render targets (the viewport is "main")."""

@@ -14,6 +14,7 @@ gui.input; tests drive the same object headlessly.  The controller owns:
 
 from __future__ import annotations
 
+import json
 import math
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -75,6 +76,9 @@ class EditorController:
         self.logger = applog.open_log(settings.logs_directory) if log_to_disk else None
         self.jobs = JobRunner(workers=2, max_pending=16, log=self._job_logged)
         self._starter_enabled = starter
+        from .imports import UserLibrary
+
+        self.user_library = UserLibrary(settings.local_directory / "user-library")
         if use_registry:
             from .sources import SourceRegistry
 
@@ -107,6 +111,8 @@ class EditorController:
             from tools.btga_studio.content.starter import ensure_starter_catalog
 
             roots.append(ensure_starter_catalog(self.settings.starter_directory))
+        if self.user_library.exists():
+            roots.append(self.user_library.root)
         if self.registry is not None:
             roots += self.registry.catalog_roots()
         roots += [r for r in self.extra_catalogs if r not in roots]
@@ -142,6 +148,100 @@ class EditorController:
         self.preferences.last_catalog = str(path)
         self.timings["catalog_open"] = time.perf_counter() - start
         self.log("info", f"catalog opened: {len(self.library.levels())} maps, {len(self.library.models())} models")
+
+    # -- imported models and textures ------------------------------------------------------
+    def read_import(self, path: Path, options) -> "ImportResult":
+        """Read a model or picture for preview; nothing is stored (raises ImportProblem)."""
+
+        from .imports import read_file
+
+        start = time.perf_counter()
+        result = read_file(Path(path), options)
+        self.timings["import_read"] = time.perf_counter() - start
+        return result
+
+    def add_import(self, result) -> list[str]:
+        """Store a previewed import in the user's library and reload the library."""
+
+        added = self.user_library.add(result)
+        self.refresh_library()
+        self.log("info", f"imported {result.file}: {result.summary()}" + ("" if added else " (already in your library)"))
+        for warning in result.warnings:
+            self.log("warning", warning)
+        return added
+
+    def remove_imports(self, identifiers: list[str]) -> list[str]:
+        removed = self.user_library.remove(identifiers)
+        self.refresh_library()
+        self.log("info", f"removed {len(removed)} imported item(s) from your library")
+        return removed
+
+    def import_package_resources(self, path: Path) -> list[str]:
+        """Restore the imported models and textures a content package carries."""
+
+        added = self.user_library.add_package(Path(path).read_bytes())
+        self.refresh_library()
+        self.log("info", f"{Path(path).name}: {len(added)} imported item(s) added to your library")
+        return added
+
+    def build_city_async(self, map_file: Path, options, elevation: Path | None = None, heights: Path | None = None, on_done=None):
+        """Build a city from OpenStreetMap data in the background, store its models, then place it on a new map.
+
+        The job result is the ``CityPlan``; placing happens on the UI thread in
+        ``place_city`` so the map edit is one undoable step.
+        """
+
+        from . import geo, osm
+
+        def work(context):
+            context.progress("reading map data")
+            data = osm.read_osm(Path(map_file))
+            terrain = geo.Terrain(Path(elevation)) if elevation else None
+            if heights:
+                options.heights = {**osm.heights_from_wikidata(json.loads(Path(heights).read_text(encoding="utf-8"))), **options.heights}
+            plan = osm.build_city(data, options, terrain, lambda stage: context.progress(f"building {stage}"))
+            context.progress("saving models to your library")
+            self.user_library.add(plan.result)
+            return plan
+
+        def done(job):
+            if job.state == "done":
+                self.refresh_library()
+                self.place_city(job.result, options.title)
+            if on_done:
+                on_done(job)
+
+        return self.jobs.submit(f"Building {options.title} from {Path(map_file).name}", work, "city", done)
+
+    def place_city(self, plan, title: str, key: str | None = None) -> str:
+        """Add a blank map sized to a city plan and place the city on it (one undoable step)."""
+
+        from . import osm
+        from .hub import slug
+
+        if self.project is None:
+            self.new_studio_project(title)
+        key = key or slug(title)
+        base = key
+        number = 2
+        while key in self.project.maps:
+            key = f"{base}_{number}"
+            number += 1
+        self.project.add_blank_map(key, title, plan.half_extent)
+        self.project.set_map_settings(key, None, (182, 196, 210))
+        self.switch_map(key)
+        osm.apply_plan(self.document, plan)
+        self.document.selection = []
+        description = self.project.project.get("description") or ""
+        if plan.credit not in description:
+            self.project.project["description"] = (description + "\n" if description else "") + plan.credit
+        counts = plan.counts
+        self.log("info", f"{title}: {counts['buildings']:,} buildings, {counts['bridges']} bridges, {counts['skyways']} skyway segments, "
+                         f"{counts['trees']:,} trees, {counts['collision']:,} collision boxes")
+        for warning in plan.result.warnings:
+            self.log("warning", warning)
+        self.frame_map()
+        return key
 
     # -- projects and maps ---------------------------------------------------------------
     @property

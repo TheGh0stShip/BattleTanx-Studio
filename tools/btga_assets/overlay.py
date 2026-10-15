@@ -369,7 +369,14 @@ def validate(scene: dict, overlay: Overlay, known_models: set[str] | None = None
         if team_counts[team] > 5:
             errors.append(_error("TEAM_LIMIT", None, f"team {team} has {team_counts[team]} spawn slots; the loader keeps at most 5", team=team))
     shapes = [s for s in edited.get("collision", []) if not s.get("disabled")]
-    for shape in shapes:
+    boxes = [_footprint_aabb(s) for s in shapes]
+    cell = 2048.0  # spatial grid: overlap candidates come from shared cells, checked in list order as before
+    grid: dict[tuple[int, int], list[int]] = {}
+    for number, (x0, z0, x1, z1) in enumerate(boxes):
+        for gx in range(math.floor(x0 / cell), math.floor(x1 / cell) + 1):
+            for gz in range(math.floor(z0 / cell), math.floor(z1 / cell) + 1):
+                grid.setdefault((gx, gz), []).append(number)
+    for number, shape in enumerate(shapes):
         if shape["id"] not in touched:
             continue
         lo, hi = shape["min"], shape["max"]
@@ -379,12 +386,15 @@ def validate(scene: dict, overlay: Overlay, known_models: set[str] | None = None
         if (lo[1] is None) != (hi[1] is None) or (lo[1] is not None and shape.get("vertical", {}).get("status") != "proven"):
             errors.append(_error("INVALID_COLLISION", shape["id"], "heights are only allowed on platforms whose collision stores them"))
             continue
-        box = _footprint_aabb(shape)
+        box = boxes[number]
         vertical = _vertical(shape)
-        for other in shapes:
-            if other["id"] == shape["id"]:
-                continue
-            ob = _footprint_aabb(other)
+        candidates = sorted({i for gx in range(math.floor(box[0] / cell), math.floor(box[2] / cell) + 1)
+                             for gz in range(math.floor(box[1] / cell), math.floor(box[3] / cell) + 1) for i in grid.get((gx, gz), [])})
+        for index in candidates:
+            other = shapes[index]
+            if other["id"] == shape["id"] or (shape.get("allow_overlap") and other.get("allow_overlap")):
+                continue  # generated approximations (for example a city's building boxes) may overlap each other
+            ob = boxes[index]
             if box[0] < ob[2] and ob[0] < box[2] and box[1] < ob[3] and ob[1] < box[3]:
                 ov = _vertical(other)
                 if vertical is None or ov is None or (vertical[0] < ov[1] and ov[0] < vertical[1]):

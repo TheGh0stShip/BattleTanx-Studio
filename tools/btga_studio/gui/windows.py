@@ -32,6 +32,9 @@ from tools.btga_studio.gui.help import TOPICS
 
 PROJECT_FILTER = ["BattleTanx Studio project", "*.btgaproj"]
 PACKAGE_FILTER = ["BattleTanx content package", "*.btgapkg"]
+CITY_FILTER = ["OpenStreetMap data", "*.osm *.json", "All files", "*"]
+HEIGHTS_FILTER = ["Wikidata heights (query result)", "*.json", "All files", "*"]
+IMPORT_FILTER = ["Models and pictures", "*.obj *.gltf *.glb *.png *.jpg *.jpeg *.bmp *.tga", "All files", "*"]
 SOURCE_FILTER = ["BattleTanx game files", "*.z64 *.v64 *.n64 *.cue *.bin *.iso *.img", "All files", "*"]
 RED, AMBER, GREEN, GREY = (1.0, 0.42, 0.38, 1.0), (1.0, 0.78, 0.3, 1.0), (0.45, 0.9, 0.45, 1.0), (0.62, 0.62, 0.66, 1.0)
 STATUS_COLOUR = {"supported": GREEN, "unknown": RED, "mismatched": RED, "incomplete": AMBER, "missing": AMBER}
@@ -139,6 +142,11 @@ class ProductUI:
         self.export_count = 0
         self.environment = None  # tests set an Environment to show installed or portable mode
         self.validation_checks = 0
+        self.show_import = False
+        self.import_state = {"files": [], "results": {}, "errors": {}, "key": None, "done": None, "units": 0, "up": 0, "ground": True,
+                             "limit": 3, "shape": 0, "size": [512.0, 512.0, 512.0], "repeat": 1.0, "group": "Imported", "credit": ""}
+        self.city_state = {"map": None, "elevation": None, "heights": None, "lat": 0.0, "lon": 0.0, "half": 2048.0, "title": "My city",
+                           "trees": True, "collision": True, "detail": 0, "error": None, "summary": None}
 
     # -- guided tour ---------------------------------------------------------------------------
     def tutorial_facts(self) -> dict:
@@ -942,9 +950,12 @@ class ProductUI:
             sizes = list(hub.MAP_SIZES.values())
             labels = list(hub.MAP_SIZES)
             current = sizes.index(half) if half in sizes else -1
-            changed, choice = imgui.combo("Map size", current, labels)
-            if changed and choice >= 0:
-                self.change("Change map size", lambda: project.set_map_settings(entry.key, sizes[choice]))
+            preview = labels[current] if current >= 0 else f"Custom ({2 * half:,.0f} units across)"
+            if imgui.begin_combo("Map size", preview):
+                for choice, label in enumerate(labels):
+                    if imgui.selectable(label, choice == current)[0] and choice != current:
+                        self.change("Change map size", lambda c=choice: project.set_map_settings(entry.key, sizes[c]))
+                imgui.end_combo()
             tooltip("The playable area. Objects outside it are refused when placed and reported by validation.")
             imgui.text_disabled(f"Playable area: {bounds['x'][1] - bounds['x'][0]:.0f} x {bounds['z'][1] - bounds['z'][0]:.0f} units. "
                                 "Objects outside it are refused or reported.")
@@ -954,6 +965,7 @@ class ProductUI:
                 self.change("Change sky colour", lambda: project.set_map_settings(entry.key, None, [int(v * 255) for v in colour]),
                             coalesce="colour:sky")
             self.seal_if_done()
+            self.sky_section(entry)
         elif bounds:
             imgui.text_disabled("This map's size and environment come from your game and are shown read-only.")
             imgui.text(f"Playable area x {bounds['x']}  z {bounds['z']}")
@@ -1108,6 +1120,8 @@ class ProductUI:
     def tab_multiplayer(self) -> None:
         project = self.controller.project
         for key, data in sorted(project.multiplayer.items()):
+            if len(project.multiplayer) == 1:
+                imgui.set_next_item_open(True, imgui.Cond_.once)  # a single setup opens ready to edit
             if imgui.tree_node(f"{data.get('title', key)}##mp{key}"):
                 self.w_text(f"Name##mp{key}", data, "title", "Rename multiplayer setup", validate=lambda v: projects._text(v, "title"))
                 self.map_combo(f"Map##mp{key}", data, "Change multiplayer map")
@@ -1456,8 +1470,8 @@ class ProductUI:
             imgui.text_colored(_colour(GREEN), "Content package exported")
             imgui.text(result["name"])
             imgui.text_disabled(f"{human_size(result['size'])}, {result['maps']} map(s), checked and readable")
-            imgui.text_wrapped("The package holds your project and Studio's original content only. Game content is referenced, "
-                               "never included, so players need their own copy of the game.")
+            imgui.text_wrapped("The package holds your project, Studio's original content and the models and pictures you imported "
+                               "(with their credits). Game content is referenced, never included, so players need their own copy of the game.")
             if imgui.button("Show in folder"):
                 self.safe_desktop(desktop.open_folder, Path(result["path"]).parent)
             imgui.same_line()
@@ -1465,6 +1479,335 @@ class ProductUI:
                 self.export_result = None
                 imgui.close_current_popup()
             imgui.end_popup()
+
+    # -- importing models and pictures ------------------------------------------------------------
+    def open_import(self) -> None:
+        self.show_import = True
+        self.import_state["done"] = None
+
+    def import_options(self):
+        from tools.btga_studio.core.imaging import TEXTURE_SIZES
+        from tools.btga_studio.core.imports import SHAPES, UNITS, ImportOptions
+
+        state = self.import_state
+        return ImportOptions(units=list(UNITS)[state["units"]], up_axis=("y", "z")[state["up"]], ground=state["ground"],
+                             texture_limit=TEXTURE_SIZES[state["limit"]], shape=SHAPES[state["shape"]], size=tuple(state["size"]),
+                             repeat=state["repeat"], group=state["group"].strip() or "Imported", credit=state["credit"].strip())
+
+    def check_imports(self) -> None:
+        """Read every chosen file with the current options (preview only)."""
+
+        from tools.btga_studio.core.imports import ImportProblem
+
+        state = self.import_state
+        options = self.import_options()
+        state["results"], state["errors"] = {}, {}
+        for path in state["files"]:
+            try:
+                state["results"][path] = self.controller.read_import(path, options)
+            except ImportProblem as error:
+                state["errors"][path] = str(error)
+            except Exception as error:  # an unexpected file must never take the editor down
+                state["errors"][path] = f"{Path(path).name} could not be read ({type(error).__name__}: {error})"
+        state["key"] = repr(options)
+
+    def window_import(self) -> None:
+        from tools.btga_studio.core.imaging import TEXTURE_SIZES
+        from tools.btga_studio.core.imports import IMAGE_FORMATS, SHAPES, UNITS, ImportProblem
+
+        self.bring_to_front("import", self.show_import)
+        if not self.show_import:
+            return
+        c = self.controller
+        state = self.import_state
+        imgui.set_next_window_size(imgui.ImVec2(900, 640), imgui.Cond_.appearing)
+        opened, self.show_import = imgui.begin("Import models and textures###import", self.show_import, imgui.WindowFlags_.no_collapse)
+        if opened:
+            imgui.text_wrapped("Bring in models and pictures from outside the games: models you made yourself, or ones you are allowed to use "
+                               "(for example public-domain or Creative Commons collections). Models: OBJ (with its MTL and pictures) and "
+                               "glTF / GLB. Pictures: PNG, JPEG, BMP and TGA. Studio keeps its own copy in your library; your files are "
+                               "not changed.")
+            if imgui.button("Add files..."):
+                chosen = self.dialogs.open_file("Choose a model or picture to import", IMPORT_FILTER)
+                if chosen and chosen not in state["files"]:
+                    state["files"].append(chosen)
+                    state["key"] = None
+                    state["done"] = None
+            self.anchor("import.add")
+            imgui.same_line()
+            imgui.begin_disabled(not state["files"])
+            if imgui.button("Clear list"):
+                state["files"], state["results"], state["errors"], state["key"] = [], {}, {}, None
+            imgui.end_disabled()
+            imgui.separator()
+            imgui.text("Options")
+            imgui.set_next_item_width(220)
+            _, state["group"] = imgui.input_text("Group in the asset browser", state["group"])
+            tooltip("Imported items appear in the asset browser under \"Imported: <group>\".")
+            imgui.set_next_item_width(-1)
+            _, state["credit"] = imgui.input_text_with_hint("##credit", "Credit and licence, e.g. \"Model by A. Person, CC BY 4.0\" or \"Made by me\"",
+                                                            state["credit"])
+            tooltip("Saved with the import and listed in every content package that uses it, so players see who made it.")
+            imgui.set_next_item_width(160)
+            _, state["units"] = imgui.combo("Model units", state["units"], list(UNITS))
+            tooltip("The unit the model was made in. One metre is about 16 Studio units (a tank is about 7 metres long).")
+            imgui.same_line()
+            imgui.set_next_item_width(120)
+            _, state["up"] = imgui.combo("Up axis", state["up"], ["Y up", "Z up"])
+            tooltip("glTF and most OBJ files are Y up. Choose Z up if the model lies on its side.")
+            imgui.same_line()
+            _, state["ground"] = imgui.checkbox("Stand on the ground", state["ground"])
+            tooltip("Move the model so its base sits at height 0 and its footprint is centred.")
+            imgui.set_next_item_width(160)
+            _, state["limit"] = imgui.combo("Largest texture", state["limit"], [f"{v} x {v}" for v in TEXTURE_SIZES[:-2]])
+            tooltip("Pictures are resized to power-of-two sizes no larger than this. Sky panoramas may use 2048.")
+            imgui.same_line()
+            imgui.set_next_item_width(160)
+            _, state["shape"] = imgui.combo("A picture becomes", state["shape"], [s.capitalize() for s in SHAPES])
+            tooltip("Keep a picture as a texture, or make a ready-to-place object from it, or use it as a sky all around the map.")
+            if SHAPES[state["shape"]] in ("ground tile", "upright panel", "box"):
+                imgui.set_next_item_width(360)
+                _, state["size"] = imgui.drag_float3("Width, height, depth (units)", state["size"], 4.0, 1.0, 20000.0, "%.0f")
+                imgui.same_line()
+                imgui.set_next_item_width(120)
+                _, state["repeat"] = imgui.drag_float("Repeats", state["repeat"], 0.05, 0.1, 64.0, "%.2f")
+            elif SHAPES[state["shape"]] == "sky panorama":
+                imgui.text_disabled("A sky panorama wraps once around the map: its left edge faces north. Choose it under "
+                                    "Gameplay editor > Map > Sky.")
+            imgui.separator()
+            if state["files"] and state["key"] != repr(self.import_options()) and not imgui.is_any_item_active():
+                self.check_imports()
+            if not state["files"]:
+                imgui.text_disabled("No files chosen yet. Choose Add files... above.")
+            elif imgui.begin_table("imports", 3, imgui.TableFlags_.row_bg | imgui.TableFlags_.borders_inner_v | imgui.TableFlags_.scroll_y,
+                                   imgui.ImVec2(0, 180)):
+                imgui.table_setup_column("File", imgui.TableColumnFlags_.width_fixed, 220)
+                imgui.table_setup_column("What Studio found")
+                imgui.table_setup_column("", imgui.TableColumnFlags_.width_fixed, 70)
+                imgui.table_headers_row()
+                for path in list(state["files"]):
+                    imgui.table_next_row()
+                    imgui.table_next_column()
+                    imgui.text(Path(path).name)
+                    imgui.table_next_column()
+                    if path in state["errors"]:
+                        imgui.text_colored(_colour(RED), "Cannot import:")
+                        imgui.text_wrapped(state["errors"][path])
+                    elif path in state["results"]:
+                        result = state["results"][path]
+                        imgui.text_colored(_colour(GREEN), result.summary())
+                        for model in result.models.values():
+                            low, high = model["bounds"]["min"], model["bounds"]["max"]
+                            imgui.text_disabled(f"{model['source']['label']}: {high[0] - low[0]:.0f} x {high[1] - low[1]:.0f} x "
+                                                f"{high[2] - low[2]:.0f} units")
+                        for warning in result.warnings:
+                            imgui.text_colored(_colour(AMBER), warning)
+                    imgui.table_next_column()
+                    if imgui.small_button(f"Remove##imp{path}"):
+                        state["files"].remove(path)
+                        state["key"] = None
+                imgui.end_table()
+            ready = [state["results"][p] for p in state["files"] if p in state["results"]]
+            imgui.begin_disabled(not ready)
+            if imgui.button(f"Import {len(ready)} file{'s' if len(ready) != 1 else ''}" if ready else "Import"):
+                added = []
+                try:
+                    for result in ready:
+                        added += c.add_import(result)
+                except (ImportProblem, OSError) as error:
+                    self.report_error("Import failed", str(error))
+                else:
+                    self.attach_library()
+                    group = self.import_options().group
+                    state["done"] = (f"Added {len(added)} item(s) to your library. Find them in the asset browser under \"Imported: {group}\"."
+                                     if added else "Everything was already in your library.")
+                    state["files"], state["results"], state["errors"], state["key"] = [], {}, {}, None
+                    self.filter_category = f"Imported: {group}" if any(r.models for r in ready) else None
+            imgui.end_disabled()
+            self.anchor("import.go")
+            if not state["credit"].strip() and ready:
+                imgui.same_line()
+                imgui.text_colored(_colour(AMBER), "Tip: add a credit and licence so others know where it came from.")
+            if state["done"]:
+                imgui.text_colored(_colour(GREEN), state["done"])
+            imgui.separator()
+            self.city_section()
+            self.import_library_section()
+        imgui.end()
+
+    def city_section(self) -> None:
+        """Build a real place from OpenStreetMap data (and optional elevation tiles) into a new map."""
+
+        c = self.controller
+        state = self.city_state
+        if not imgui.collapsing_header("Build a city from OpenStreetMap###city"):
+            return
+        imgui.text_wrapped("Turn a map area you exported from openstreetmap.org (Export button, .osm file) or an Overpass API query "
+                           "(.json, \"out geom\") into a playable map at true scale: buildings with their real heights, roads, rivers, "
+                           "parks, bridges, skyways and trees. Add elevation tiles (Terrarium PNG folder, z/x/y.png) for real hills and "
+                           "river valleys. Map data is (c) OpenStreetMap contributors under the ODbL; Studio adds the credit for you.")
+        if imgui.button("Map data file..."):
+            chosen = self.dialogs.open_file("Choose OpenStreetMap data (.osm or Overpass .json)", CITY_FILTER)
+            if chosen:
+                self.choose_city_file(chosen)
+        imgui.same_line()
+        imgui.text(Path(state["map"]).name if state["map"] else "none chosen")
+        if imgui.button("Elevation tiles folder..."):
+            chosen = self.dialogs.select_folder("Choose the folder of Terrarium elevation tiles (z/x/y.png)")
+            if chosen:
+                state["elevation"] = chosen
+        imgui.same_line()
+        imgui.text(Path(state["elevation"]).name if state["elevation"] else "optional (flat ground without it)")
+        if imgui.button("Building heights file..."):
+            chosen = self.dialogs.open_file("Choose a Wikidata heights query result (.json)", HEIGHTS_FILTER)
+            if chosen:
+                state["heights"] = chosen
+        imgui.same_line()
+        imgui.text(Path(state["heights"]).name if state["heights"] else "optional (fills heights the map data lacks)")
+        imgui.set_next_item_width(240)
+        _, state["title"] = imgui.input_text("Map name##city", state["title"])
+        imgui.set_next_item_width(240)
+        _, (state["lat"], state["lon"]) = imgui.input_float2("Centre latitude, longitude", [state["lat"], state["lon"]], "%.5f")
+        imgui.set_next_item_width(240)
+        _, state["half"] = imgui.slider_float("Half size (metres)", state["half"], 256.0, 2048.0, "%.0f m")
+        tooltip("Distance from the centre to each edge. 2,048 m (a map 4 km across) is the largest Studio map.")
+        imgui.set_next_item_width(240)
+        _, state["detail"] = imgui.combo("Detail", state["detail"], ["Standard", "High (larger package)"])
+        tooltip("High detail adds windows that match the real floors, roof parapets, gabled and hipped roofs, street lamps and traffic "
+                "signals, walls, fences and hedges, crosswalks and curbs, more trees, and ground pictures twice as sharp.")
+        _, state["trees"] = imgui.checkbox("Trees", state["trees"])
+        imgui.same_line()
+        _, state["collision"] = imgui.checkbox("Solid buildings (collision boxes)", state["collision"])
+        busy = bool(c.jobs.find("city"))
+        imgui.begin_disabled(busy or not state["map"])
+        if imgui.button("Build city into a new map"):
+            self.start_city()
+        imgui.end_disabled()
+        self.anchor("city.go")
+        self.jobs_panel(("city",))
+        if state["error"]:
+            imgui.text_colored(_colour(RED), state["error"])
+        if state["summary"]:
+            imgui.text_colored(_colour(GREEN), state["summary"])
+
+    def choose_city_file(self, path: Path) -> None:
+        from tools.btga_studio.core import osm
+        from tools.btga_studio.core.imports import ImportProblem
+
+        state = self.city_state
+        state["map"], state["error"], state["summary"] = path, None, None
+        try:
+            data = osm.read_osm(Path(path))
+        except (ImportProblem, OSError, ValueError) as error:
+            state["map"], state["error"] = None, str(error)
+            return
+        if data.bounds:
+            south, west, north, east = data.bounds
+        else:
+            lats = [lat for way in data.ways for lat, _ in way["coords"]] + [n["lat"] for n in data.nodes]
+            lons = [lon for way in data.ways for _, lon in way["coords"]] + [n["lon"] for n in data.nodes]
+            south, north, west, east = min(lats), max(lats), min(lons), max(lons)
+        state["lat"], state["lon"] = round((south + north) / 2, 5), round((west + east) / 2, 5)
+        if state["title"] == "My city":
+            state["title"] = Path(path).stem.replace("_", " ").title()[:40]
+
+    def start_city(self) -> None:
+        from tools.btga_studio.core import osm
+
+        state = self.city_state
+        state["error"], state["summary"] = None, None
+        try:
+            high = state["detail"] == 1
+            options = osm.CityOptions(centre=(float(state["lat"]), float(state["lon"])), half_extent_m=float(state["half"]),
+                                      trees=state["trees"], collision=state["collision"], detail="high" if high else "standard",
+                                      ground_metres_per_pixel=0.5 if high else 1.0, terrain_spacing_m=8.0 if high and state["half"] <= 1200 else 16.0,
+                                      fine_ground_radius_m=1100.0 if high and state["half"] > 1200 else None, title=projects._text(state["title"], "map name") or "City",
+                                      group=re.sub(r"[^\w \-]", "", state["title"])[:30] or "City")
+        except (ValueError, projects.ProjectError) as error:
+            state["error"] = str(error)
+            return
+
+        def done(job):
+            if job.state == "done":
+                counts = job.result.counts
+                state["summary"] = (f"Built {options.title}: {counts['buildings']:,} buildings, {counts['bridges']} bridges, "
+                                    f"{counts['skyways']} skyway segments, {counts['trees']:,} trees.")
+                self.attach_library()
+            elif job.state == "failed":
+                state["error"] = job.error
+
+        self.attempt("Build city", self.controller.build_city_async, state["map"], options, state["elevation"], state["heights"], done)
+
+    def import_library_section(self) -> None:
+        c = self.controller
+        models, textures = c.user_library.entries()
+        if not imgui.collapsing_header(f"Your imported library ({len(models)} models, {len(textures)} textures)###implib"):
+            return
+        if imgui.button("Add from a content package..."):
+            chosen = self.dialogs.open_file("Choose a content package whose imported models you want", PACKAGE_FILTER)
+            if chosen:
+                if self.attempt("Add from package", c.import_package_resources, chosen) is not None:
+                    self.attach_library()
+        tooltip("Projects shared from another computer need the imported models their packages carry.")
+        if not models and not textures:
+            imgui.text_disabled("Nothing imported yet.")
+            return
+        if imgui.begin_table("implib", 4, imgui.TableFlags_.row_bg | imgui.TableFlags_.borders_inner_v | imgui.TableFlags_.scroll_y,
+                             imgui.ImVec2(0, 200)):
+            for heading in ("Name", "Group", "Credit and licence", ""):
+                imgui.table_setup_column(heading)
+            imgui.table_headers_row()
+            used = {t for m in models for t in m["textures"]}
+            rows = [("model", m) for m in models] + [("texture", t) for t in textures if t["id"] not in used]
+            for kind, entry in rows:
+                imgui.table_next_row()
+                imgui.table_next_column()
+                label = entry.get("label") or entry["id"].rsplit(":", 1)[-1][:12]
+                imgui.text(f"{label}{' (sky)' if entry.get('sky') else ' (texture)' if kind == 'texture' else ''}")
+                if imgui.is_item_hovered():
+                    imgui.set_tooltip(f"ID {entry['id']}" + (f"\nFrom {entry['file_name']}" if entry.get("file_name") else ""))
+                imgui.table_next_column()
+                imgui.text(entry.get("group", ""))
+                imgui.table_next_column()
+                imgui.text_wrapped(entry.get("credit") or "-")
+                imgui.table_next_column()
+                if imgui.small_button(f"Remove##lib{entry['id']}"):
+                    self.confirm("Remove imported item", f"Remove \"{label}\" from your library? Maps that use it will show a "
+                                 "stand-in box until it is imported again.", "Remove",
+                                 lambda i=entry["id"]: (c.remove_imports([i]), self.attach_library()))
+            imgui.end_table()
+
+    def sky_section(self, entry) -> None:
+        """Map tab: the sky panorama of a blank map."""
+
+        c = self.controller
+        project = c.project
+        library = c.library
+        skies = [t for t in library.catalog["textures"] if t.get("sky") and t.get("file")]
+        current = (entry.base["environment"][0].get("sky") or {}) if entry.base else {}
+        names = ["None (plain colour)"] + [t.get("label") or t["id"] for t in skies]
+        ids = [None] + [t["id"] for t in skies]
+        index = ids.index(current.get("texture")) if current.get("texture") in ids else 0
+        imgui.set_next_item_width(260)
+        changed, choice = imgui.combo("Sky panorama", index, names)
+        self.anchor("gameplay.sky")
+        if changed:
+            if ids[choice] is None:
+                self.change("Remove sky", lambda: project.set_map_sky(entry.key, None))
+            else:
+                texture = next(t for t in skies if t["id"] == ids[choice])
+                self.change("Change sky", lambda: project.set_map_sky(entry.key, {"texture": texture["id"], "north": current.get("north", 0.0),
+                                                                                  **texture["sky"]}))
+        tooltip("A picture all around the horizon. Import one with File > Import models and textures (A picture becomes: Sky panorama).")
+        if current.get("texture"):
+            imgui.set_next_item_width(260)
+            changed, north = imgui.slider_float("Turn sky (degrees)", float(current.get("north", 0.0)), -180.0, 180.0, "%.0f")
+            if changed:
+                self.change("Turn sky", lambda: project.set_map_sky(entry.key, {**current, "north": round(north, 1)}), coalesce="slider:sky-north")
+            self.seal_if_done()
+            tooltip("Lines the panorama up with the map: the bearing of the map's north (-Z) on the picture.")
+        elif not skies:
+            imgui.text_disabled("No sky panoramas imported yet.")
 
     # -- toolbar, status bar and context menus --------------------------------------------------
     def toolbar(self) -> None:
@@ -1555,6 +1898,9 @@ class ProductUI:
         if imgui.menu_item("Unlock all", "", False, bool(doc.locked))[0]:
             doc.unlock_all()
         imgui.separator()
+        solid = has and any(doc.family(r) == "instances" for r in doc.selection if doc.scene.record(r))
+        if imgui.menu_item("Make solid (add collision box)", "", False, solid)[0]:
+            self.attempt("Make solid", doc.add_collision_for)
         if imgui.menu_item("Save as prefab...", "", False, has)[0]:
             self.open_gameplay("Prefabs")
         if imgui.menu_item("Delete", "Del", False, has)[0]:

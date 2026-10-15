@@ -70,6 +70,8 @@ def capture(project) -> dict:
         if entry.kind == "blank" and entry.base:
             item["bounds"] = copy.deepcopy(entry.base["bounds"]["map"])
             item["colour"] = list(entry.base["environment"][0]["clear_and_fog_colour"])
+            if entry.base["environment"][0].get("sky"):
+                item["sky"] = copy.deepcopy(entry.base["environment"][0]["sky"])
         maps[key] = item
     state["maps"] = maps
     return state
@@ -89,6 +91,10 @@ def restore(project, state: dict) -> None:
         if "bounds" in item and entry.base:
             entry.base["bounds"]["map"] = copy.deepcopy(item["bounds"])
             entry.base["environment"][0]["clear_and_fog_colour"] = list(item["colour"])
+            if item.get("sky"):
+                entry.base["environment"][0]["sky"] = copy.deepcopy(item["sky"])
+            else:
+                entry.base["environment"][0].pop("sky", None)
             if entry.document is not None:
                 entry.document.scene.base["bounds"] = copy.deepcopy(entry.base["bounds"])
                 entry.document.scene.base["environment"] = copy.deepcopy(entry.base["environment"])

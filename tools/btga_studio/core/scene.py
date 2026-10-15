@@ -18,6 +18,7 @@ import numpy as np
 
 from tools.btga_assets import overlay as overlay_module
 from tools.btga_assets.gltf import PLANAR_DISPLAY_HEIGHT
+from tools.btga_assets.studio import StudioError
 
 from . import geometry as g
 
@@ -79,12 +80,18 @@ class MeshCache:
         self.triangles = 0
         self.loads = 0
         self.evictions = 0
+        self.missing: set[str] = set()
 
     def get(self, model_id: str) -> MeshData:
         if model_id in self.entries:
             self.entries.move_to_end(model_id)
             return self.entries[model_id]
-        data = MeshData(model_id, self.library.model(model_id).mesh)
+        try:
+            mesh = self.library.model(model_id).mesh
+        except StudioError:  # an imported model missing from this computer's library: draw a stand-in box
+            mesh = missing_mesh()
+            self.missing.add(model_id)
+        data = MeshData(model_id, mesh)
         self.loads += 1
         self.entries[model_id] = data
         self.triangles += data.triangle_count
@@ -97,6 +104,20 @@ class MeshCache:
     def clear(self) -> None:
         self.entries.clear()
         self.triangles = 0
+
+
+def missing_mesh() -> dict:
+    """A 100-unit magenta box shown in place of a model that is not in any loaded library."""
+
+    corners = [(x, y, z) for x in (-50.0, 50.0) for y in (0.0, 100.0) for z in (-50.0, 50.0)]
+    faces = ((0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3))
+    colour = [0.95, 0.2, 0.85, 1.0]
+    triangles = []
+    for a, b, c, d in faces:
+        for tri in ((a, b, c), (a, c, d)):
+            triangles.append({"material": 0, "corners": [{"p": i, "uv": None, "colour": colour, "normal": None} for i in tri], "source": {}})
+    return {"positions": [list(c) for c in corners], "triangles": triangles, "lods": [],
+            "materials": [{"id": "missing", "double_sided": True, "alpha_mode": "OPAQUE", "texture": None}]}
 
 
 def record_box(record: dict, family: str, mesh: MeshData | None) -> tuple[np.ndarray, np.ndarray]:

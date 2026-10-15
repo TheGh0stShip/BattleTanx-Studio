@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 from .document import is_read_only
 
-GAMES = {"n64_btga": "Global Assault (N64)", "ps1": "Global Assault (PS1)", "n64_bt1": "BattleTanx (N64)", "studio": "Studio starter"}
+GAMES = {"n64_btga": "Global Assault (N64)", "ps1": "Global Assault (PS1)", "n64_bt1": "BattleTanx (N64)", "studio": "Studio starter", "user": "Imported by you"}
 GAMEPLAY_GROUPS = {
     "Spawns": {"team_spawn_slot", "team_start", "team_point_a", "team_point_b", "multiplayer_structure", "point_list_entry", "player_spawn"},
     "Navigation": {"navigation_node"},
@@ -20,6 +20,7 @@ GAMEPLAY_GROUPS = {
     "Pickups": {"pickup", "powerup_pad", "crate"},
     "Objectives": {"objective", "mission_trigger"},
     "Hazards": {"hazard"},
+    "Teleporters": {"teleporter", "teleport_exit"},
 }
 
 
@@ -55,15 +56,17 @@ class AssetIndex:
             category = "Vehicles & object library" if model.get("library") else "Models"
             if (model.get("library") or "").startswith("starter:"):
                 category = "Starter " + model["library"].split(":", 1)[1].lower()
+            elif (model.get("library") or "").startswith("user:"):
+                category = "Imported: " + model["library"].split(":", 1)[1]
             self.catalog_entries.append(_entry(id=model["id"], kind="model", category=category, platform=model.get("platform"),
                                                label=model.get("label") or model["id"].rsplit(":", 1)[-1][:12], library=model.get("library"),
                                                detail=f"{model.get('triangles', 0)} triangles"))
         for texture in library.catalog["textures"]:
             if not texture.get("file"):
                 continue
-            self.catalog_entries.append(_entry(id=texture["id"], kind="texture", category="Textures",
+            self.catalog_entries.append(_entry(id=texture["id"], kind="texture", category="Sky panoramas" if texture.get("sky") else "Textures",
                                                platform=(texture.get("source") or {}).get("platform"),
-                                               label=texture["id"].rsplit(":", 1)[-1][:12], detail=f"{texture['width']}x{texture['height']} {texture.get('format', '')}"))
+                                               label=texture.get("label") or texture["id"].rsplit(":", 1)[-1][:12], detail=f"{texture['width']}x{texture['height']} {texture.get('format', '')}"))
         self.map_entries: list[AssetEntry] = []
         self.map_models: set[str] = set()
         self.templates: dict[str, dict] = {}
@@ -121,7 +124,7 @@ class AssetIndex:
             if library and entry.library != library:
                 continue
             if map_only and entry.kind == "model" and entry.source == "source" and entry.id not in self.map_models \
-                    and entry.platform != "studio":
+                    and entry.platform not in ("studio", "user"):
                 continue
             if map_only and entry.kind == "texture":
                 continue

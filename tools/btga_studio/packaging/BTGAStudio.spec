@@ -20,7 +20,8 @@ analysis = Analysis(
     pathex=[str(ROOT)],
     binaries=binaries,
     datas=datas,
-    hiddenimports=hidden + ["tools.btga_studio.gui.app", "tools.btga_studio.gui.renderer", "tools.btga_studio.samples"],
+    hiddenimports=hidden + ["tools.btga_studio.gui.app", "tools.btga_studio.gui.renderer", "tools.btga_studio.samples",
+                            "tools.btga_studio.core.imports", "tools.btga_studio.core.osm", "tools.btga_studio.core.skyline"],
     excludes=["tkinter", "matplotlib", "PIL", "pytest"],
     noarchive=False,
 )

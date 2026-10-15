@@ -64,7 +64,7 @@ def png_rgba(data: bytes) -> tuple[int, int, bytes]:
     for row in range(height):
         kind = raw[row * (stride + 1)]
         line = bytearray(raw[row * (stride + 1) + 1 : (row + 1) * (stride + 1)])
-        for index in range(stride):
+        for index in range(stride if kind else 0):  # filter 0 (what our tools write) needs no per-byte work
             left = line[index - channels] if index >= channels else 0
             up = previous[index]
             corner = previous[index - channels] if index >= channels else 0

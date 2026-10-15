@@ -53,7 +53,18 @@ def collect(document, library) -> list[Diagnostic]:
             out.append(Diagnostic("error", "DUPLICATE_ID", "two records share this ID", record["id"]))
         seen.add(record["id"])
         if family == "instances" and record["model"] not in known_models:
-            out.append(Diagnostic("error", "DANGLING_REFERENCE", f"model {record['model']} is not in the catalog", record["id"]))
+            if str(record["model"]).startswith("user:"):
+                out.append(Diagnostic("error", "MISSING_IMPORT", f"imported model {record['model']} is not in your library on this computer; "
+                                      "import it again or add a content package that has it (File > Import models and textures)", record["id"]))
+            else:
+                out.append(Diagnostic("error", "DANGLING_REFERENCE", f"model {record['model']} is not in the catalog", record["id"]))
+        if record.get("category") == "teleporter" and not record.get("disabled"):
+            target = (record.get("fields", {}).get("exit") or {}).get("value")
+            found = scene.record(target) if target else None
+            if not target:
+                out.append(Diagnostic("error", "TELEPORTER_WITHOUT_EXIT", "choose the teleport exit this pad sends vehicles to", record["id"], "exit"))
+            elif found is not None and found[1].get("category") != "teleport_exit":
+                out.append(Diagnostic("error", "INVALID_FIELD", f"exit must be a teleport exit, not {found[1].get('category')}", record["id"], "exit"))
         for dependency in record.get("dependencies", []):
             if dependency.get("kind") == "model" and dependency.get("id") and dependency["id"] not in known_models:
                 out.append(Diagnostic("error", "DANGLING_REFERENCE", f"model {dependency['id']} is not in the catalog", record["id"]))

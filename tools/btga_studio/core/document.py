@@ -463,6 +463,32 @@ class EditorDocument:
             raise EditError("collision extent is empty or inverted")
         self._commit("Edit collision", [{"op": "set_collision", "target": record_id, "min": lo, "max": hi}], {record_id})
 
+    def add_collision_for(self, ids: list[str] | None = None) -> list[str]:
+        """Make placed models solid: one collision box per model, matching its bounds (one undoable step)."""
+
+        ids = list(ids if ids is not None else self.selection)
+        edits = []
+        for record_id in ids:
+            if self.family(record_id) != "instances":
+                continue
+            record = self.record(record_id)
+            mesh = self.scene.meshes.get(record["model"])
+            scale = [float(v) for v in (record.get("scale") or (1.0, 1.0, 1.0))]
+            lo = [round(float(mesh.lo[i]) * scale[i], 3) for i in range(3)]
+            hi = [round(float(mesh.hi[i]) * scale[i], 3) for i in range(3)]
+            if lo[0] >= hi[0] or lo[2] >= hi[2]:
+                continue  # flat ground pieces need no box
+            if hi[1] - lo[1] < 1.0:
+                continue
+            edits.append({"op": "add_collision", "collision": {
+                "shape": "box", "translation": [float(v) for v in record["translation"]], "yaw": int(record["yaw"]) & 0xFFFF,
+                "min": lo, "max": hi, "vertical": {"status": "proven", "evidence": "Studio box from model bounds"},
+                "confidence": "proven", "category": "collision", "source": {"user_created": True, "solid_for": record_id}}})
+        if not edits:
+            raise EditError("select placed models (not flat ground pieces) to make them solid")
+        transaction = self._commit("Make solid", edits, set())
+        return [edit["collision"]["id"] for edit in transaction.edits]
+
     def set_minimap(self, minimap: dict) -> None:
         self._commit("Minimap", [{"op": "set_minimap", "minimap": copy.deepcopy(minimap)}], set())
 

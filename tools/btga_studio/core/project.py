@@ -324,6 +324,25 @@ class StudioProject:
             entry.document.scene.base["bounds"] = copy.deepcopy(entry.base["bounds"])
             entry.document.scene.base["environment"] = copy.deepcopy(entry.base["environment"])
 
+    def set_map_sky(self, key: str, sky: dict | None) -> None:
+        """Set (or with None remove) the sky panorama of a blank map; see ``core.sky``."""
+
+        from . import sky as sky_module
+
+        entry = self.maps[key]
+        if entry.kind != "blank":
+            raise ProjectError("the sky of an imported map comes from the source")
+        environment = entry.base["environment"][0]
+        if sky is None:
+            environment.pop("sky", None)
+        else:
+            try:
+                environment["sky"] = sky_module.check(sky)
+            except sky_module.SkyError as error:
+                raise ProjectError(str(error)) from error
+        if entry.document is not None:
+            entry.document.scene.base["environment"] = copy.deepcopy(entry.base["environment"])
+
     @property
     def dirty(self) -> bool:
         """Unsaved changes to project content.  Undo history is not content: undoing back to the saved state is clean."""
@@ -380,6 +399,10 @@ class StudioProject:
                 if entry.kind == "imported" and entry.scene not in library._levels:
                     out.append({"code": "MISSING_SOURCE", "target": f"maps:{entry.key}", "field": "scene",
                                 "message": f"scene {entry.scene} is not in any loaded catalog; register the source it came from"})
+                sky = (entry.base or {}).get("environment", [{}])[0].get("sky") if entry.kind == "blank" and entry.base else None
+                if sky and sky.get("texture") not in library._textures:
+                    out.append({"code": "MISSING_IMPORT", "target": f"maps:{entry.key}", "field": "sky",
+                                "message": f"sky picture {sky.get('texture')} is not in your library; import it again or open a package that has it"})
             loaded = {_source_key(s) for s in library.catalog.get("sources", [])}
             for source in self.dependencies.get("sources", []):
                 if _source_key(source) not in loaded:
