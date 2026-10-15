@@ -159,3 +159,58 @@ def ps1_mesh(record: dict, slot_textures: dict[int, dict | None]) -> dict:
             except MeshError as error:
                 builder.reject(source, str(error))
     return builder.build()
+
+
+# -- N64 lighting --------------------------------------------------------------------------
+# Some N64 models (Global Assault's tanks among them) are drawn with lighting switched on by the
+# code that calls their display list, not by the list itself.  Decoded alone, their vertex "colours"
+# are then lighting normals (signed bytes, length 127), which would show as red/green/blue patches.
+GAME_LIGHT = (0.37, 0.80, 0.47)  # direction towards the light: high and to one side, like a sunlit level
+GAME_AMBIENT, GAME_DIFFUSE = 0.42, 0.68
+
+
+def normal_coloured_materials(mesh: dict) -> set[int]:
+    """Indices of N64 materials decoded as unlit whose every vertex colour is really a unit normal."""
+
+    candidates = {index for index, material in enumerate(mesh["materials"])
+                  if "|lit0" in str(material.get("id", "")) and str(material.get("vertex_colour", "")).startswith("shade")}
+    if not candidates:
+        return set()
+    seen: dict[int, list[int]] = {index: [0, 0] for index in candidates}
+    for triangle in mesh["triangles"]:
+        counts = seen.get(triangle["material"])
+        if counts is None:
+            continue
+        for corner in triangle["corners"]:
+            colour = corner.get("colour")
+            counts[1] += 1
+            if colour:
+                signed = [round(v * 255) - 256 if round(v * 255) > 127 else round(v * 255) for v in colour[:3]]
+                if abs(math.sqrt(sum(v * v for v in signed)) - 127) < 12:
+                    counts[0] += 1
+    return {index for index, (normal, total) in seen.items() if total and normal == total}
+
+
+def shade_from_normal(colour) -> list[float]:
+    """Grey light level for a normal stored as a colour, with the vertex alpha kept."""
+
+    signed = [round(v * 255) - 256 if round(v * 255) > 127 else round(v * 255) for v in colour[:3]]
+    length = math.sqrt(sum(v * v for v in signed)) or 1.0
+    light = math.sqrt(sum(v * v for v in GAME_LIGHT))
+    facing = max(0.0, sum(n / length * l / light for n, l in zip(signed, GAME_LIGHT)))
+    level = min(1.0, GAME_AMBIENT + GAME_DIFFUSE * facing)
+    return [level, level, level, colour[3] if len(colour) > 3 else 1.0]
+
+
+def with_game_lighting(mesh: dict) -> dict:
+    """``mesh`` with normal-as-colour corners replaced by lit grey levels (the input is not changed)."""
+
+    lit = normal_coloured_materials(mesh)
+    if not lit:
+        return mesh
+    triangles = []
+    for triangle in mesh["triangles"]:
+        if triangle["material"] in lit:
+            triangle = {**triangle, "corners": [{**corner, "colour": shade_from_normal(corner["colour"])} for corner in triangle["corners"]]}
+        triangles.append(triangle)
+    return {**mesh, "triangles": triangles}

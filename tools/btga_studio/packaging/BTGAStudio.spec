@@ -21,7 +21,11 @@ analysis = Analysis(
     binaries=binaries,
     datas=datas,
     hiddenimports=hidden + ["tools.btga_studio.gui.app", "tools.btga_studio.gui.renderer", "tools.btga_studio.samples",
-                            "tools.btga_studio.core.imports", "tools.btga_studio.core.osm", "tools.btga_studio.core.skyline"],
+                            "tools.btga_studio.core.imports", "tools.btga_studio.core.osm", "tools.btga_studio.core.skyline",
+                            "tools.btga_studio.core.scenario", "tools.btga_studio.core.items", "tools.btga_studio.core.bots",
+                            "tools.btga_studio.core.actions", "tools.btga_studio.core.runtime", "tools.btga_studio.core.authoring",
+                            "tools.btga_studio.core.navgraph", "tools.btga_studio.core.game_models", "tools.btga_studio.gui.authoring",
+                            "tools.btga_studio.gui.drive_preview"],
     excludes=["tkinter", "matplotlib", "PIL", "pytest"],
     noarchive=False,
 )

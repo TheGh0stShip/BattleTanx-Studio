@@ -36,7 +36,8 @@ COPIED = ("tools/btga_assets", "tools/btga_studio", "tools/benchmark_studio_edit
           "src/code/frontend/800E8380_slot_asset_ranges.c", "tests/test_studio_installer.py", "tests/test_studio_history.py",
           "tests/test_studio_tutorial_fonts.py", "tests/test_studio_setup.py", "tests/test_studio_evidence.py",
           "tools/audit_studio_package.py", "tools/audit_studio_installer.py", "tools/studio_evidence.py",
-          "private-work/toolchains/fonts", "tests/test_studio_imports.py")
+          "tests/test_studio_imports.py", "tests/test_studio_scenarios.py", "tests/test_studio_drive.py",
+          "tools/runtime_feature_matrix.py", "docs/RUNTIME_FEATURES.md", "docs/schemas")
 TESTS = ("tests.test_studio_editor",)
 ACCEPTANCE_TESTS = ("tests.test_studio_acceptance",)
 PRODUCT_TESTS = ("tests.test_studio_product",)
@@ -117,7 +118,9 @@ PRODUCT_MUTATIONS = (
     (ATOMIC, "partial file left after a failed write", "        try:\n            os.unlink(temporary)\n        except OSError:\n            pass",
      "        pass"),
     (JOBS, "unbounded job queue", "        if len(self.active) >= self.max_pending:", "        if False:"),
-    (JOBS, "cancelled job reported as failed", '            except Cancelled:\n                job.state = "cancelled"', '            except Cancelled:\n                job.state = "failed"'),
+    (JOBS, "cancelled job reported as failed", '            except Cancelled:\n                terminal_state = "cancelled"',
+     '            except Cancelled:\n                terminal_state = "failed"'),
+    (JOBS, "failed job loses its traceback", "                job.detail = traceback.format_exc()", "                job.detail = None"),
     (SOURCES, "damaged registry silently overwritten", "        except ValueError:\n            self._preserve_unreadable()\n            return",
      "        except ValueError:\n            return"),
     (SOURCES, "failed rebuild deletes the working catalog", "        except BaseException:\n            shutil.rmtree(work, ignore_errors=True)\n            raise",
@@ -167,8 +170,8 @@ RELEASE_GATE_MUTATIONS = (
     (GUI_FONTS, "fallback fonts not merged", "        config.merge_mode = number > 0 and bool(primary)", "        config.merge_mode = False"),
     (HISTORY, "failed edit stays applied", "        except BaseException:\n            restore(self.project, before)\n            raise", "        except BaseException:\n            raise"),
     (HISTORY, "typing never stops coalescing", "and now - current.stamp <= COALESCE_SECONDS", "and True"),
-    (PROJECT, "undo history counted as unsaved content", "        return _content(json.loads(dumps(self))) != self._saved_content",
-     "        return dumps(self) != self._saved_text"),
+    (PROJECT, "undo history counted as unsaved content", "        value = _content(json.loads(dumps(self))) != self._saved_content",
+     "        value = dumps(self) != self._saved_text"),
     (PROJECT, "saved sequence numbers are not deterministic", "        data.update(self.unknown)\n        _rank_sequences(data)", "        data.update(self.unknown)"),
     (CONTROLLER, "undo picks the older history", "        if def_seq is not None and (doc_seq is None or def_seq > doc_seq):",
      "        if def_seq is not None and (doc_seq is None or def_seq < doc_seq):"),
@@ -231,6 +234,83 @@ IMPORT_MUTATIONS = (
 )
 
 
+SCENARIO = "tools/btga_studio/core/scenario.py"
+ACTIONS = "tools/btga_studio/core/actions.py"
+ITEMS = "tools/btga_studio/core/items.py"
+BOTS = "tools/btga_studio/core/bots.py"
+RUNTIME = "tools/btga_studio/core/runtime.py"
+AUTHORING = "tools/btga_studio/core/authoring.py"
+DRIVE = "tools/btga_studio/core/drive.py"
+DRIVE_GUI = "tools/btga_studio/gui/drive_preview.py"
+AUTHORING_TESTS = ("tests.test_studio_scenarios", "tests.test_studio_drive")
+AUTHORING_MUTATIONS = (
+    (SCENARIO, "requirement loops accepted", "    cycle = requirement_cycle({k: v for k, v in objectives.items() if isinstance(v, dict)})\n    if cycle:",
+     "    cycle = None\n    if cycle:"),
+    (SCENARIO, "trigger loops accepted", "    cycle = trigger_cycle({k: v for k, v in triggers.items() if isinstance(v, dict)})", "    cycle = None"),
+    (SCENARIO, "dangling requirement accepted", "            if required not in objectives:\n                err(\"DANGLING_REFERENCE\"",
+     "            if False:\n                err(\"DANGLING_REFERENCE\""),
+    (SCENARIO, "more targets asked than exist", "            and params[\"count\"] > len(params[\"targets\"]):", "            and params[\"count\"] > 999:"),
+    (SCENARIO, "collect ignores the pickups on the map", "        if not unlimited and available < params[\"count\"]:", "        if False:"),
+    (SCENARIO, "impossibility not propagated", "            if element_id not in impossible and isinstance(objective, dict) and any(",
+     "            if False and isinstance(objective, dict) and any("),
+    (SCENARIO, "unreachable areas accepted", "            if a and b and not ctx.navigation.connected(a, b):\n                err(\"UNREACHABLE_OBJECTIVE\"",
+     "            if False:\n                err(\"UNREACHABLE_OBJECTIVE\""),
+    (SCENARIO, "element IDs not reused deterministically", "    number = 1\n    while f\"{prefix}{number}\" in existing:",
+     "    number = len(existing) + 1\n    while f\"{prefix}{number}\" in existing:"),
+    (SCENARIO, "scenario without victory accepted", "            err(\"NO_VICTORY\", \"victory\",", "            pass  # err(\"NO_VICTORY\", \"victory\","),
+    (SCENARIO, "unknown objective kinds pass", "            err(\"UNSUPPORTED_OBJECTIVE\", f\"{where}.kind\", f\"unknown objective kind {kind!r}\")",
+     "            out.append(Problem(\"warning\", \"UNSUPPORTED_OBJECTIVE\", target, f\"{where}.kind\", \"unknown\"))"),
+    (PROJECT, "missions not migrated", "        scenarios[key] = scenario_module.from_mission(key, mission)", "        pass"),
+    (HISTORY, "scenarios outside undo", "FAMILIES = (\"campaigns\", \"missions\", \"multiplayer\", \"minigames\", \"tanks\", \"gangs\", \"scenarios\", \"items\")",
+     "FAMILIES = (\"campaigns\", \"missions\", \"multiplayer\", \"minigames\", \"tanks\", \"gangs\", \"items\")"),
+    (ACTIONS, "action contexts ignored", "    if ctx.context not in spec[\"contexts\"]:", "    if False:"),
+    (ACTIONS, "action number ranges ignored",
+     "            if not isinstance(value, int) or isinstance(value, bool) or not kind_spec[1] <= value <= kind_spec[2]:",
+     "            if not isinstance(value, int) or isinstance(value, bool):"),
+    (ITEMS, "item grant loops accepted", "    if cycle and len(cycle) > 2:", "    if False:"),
+    (ITEMS, "unsupported effects reported as plain field errors",
+     "code = \"UNSUPPORTED_EFFECT\" if \"cannot be used\" in message or \"unknown action\" in message else (",
+     "code = \"INVALID_FIELD\" if \"cannot be used\" in message or \"unknown action\" in message else ("),
+    (ITEMS, "missing item models accepted", "        elif known_models is not None and model not in known_models:", "        elif False:"),
+    (BOTS, "duplicate slot claims accepted", "        if len(ids) > 1:\n            for rid in ids:", "        if len(ids) > 2:\n            for rid in ids:"),
+    (BOTS, "runtime slot limit ignored", "        if not isinstance(slot, int) or not 0 <= slot < slot_limit:", "        if not isinstance(slot, int) or not 0 <= slot:"),
+    (BOTS, "unresolved Queenlords reported as ordinary missing models",
+     "            if value(bot, \"kind\") == 1:\n                out.append(Problem(\"error\", \"QUEENLORD_UNRESOLVED\"",
+     "            if False:\n                out.append(Problem(\"error\", \"QUEENLORD_UNRESOLVED\""),
+    (BOTS, "dead-end patrols accepted", "                if len(set(route)) < 2:", "                if False:"),
+    (BOTS, "unreachable bot targets accepted",
+     "                if a and b and not graph.connected(a, b):\n                    out.append(Problem(\"error\", \"UNREACHABLE_TARGET\"",
+     "                if False:\n                    out.append(Problem(\"error\", \"UNREACHABLE_TARGET\""),
+    (CONTROLLER, "placed bots share a slot", "                    values[\"ai_slot\"] = free", "                    values[\"ai_slot\"] = 0"),
+    (RUNTIME, "edited project not detected as stale", "        elif (current_content or content_sha256(project)) != export.content_sha256:", "        elif False:"),
+    (RUNTIME, "changed package file not detected", "        if package_hash != export.sha256:", "        if False:"),
+    (RUNTIME, "wrong cartridge accepted", "        if wanted and actual not in wanted:", "        if False:"),
+    (RUNTIME, "missing player spawn accepted",
+     '            if spawn is None or spawn.get("category") not in ("player_spawn", "team_start"):', "            if False:"),
+    (RUNTIME, "missing bot placement accepted", "        if unavailable:\n            problems.append((\"INVALID_SELECTION\"",
+     "        if False:\n            problems.append((\"INVALID_SELECTION\""),
+    (RUNTIME, "runtime missing features accepted", "        if report[\"missing\"]:", "        if False:"),
+    (RUNTIME, "launch despite problems", "    if not plan.ok:\n        raise RuntimeProblem", "    if False:\n        raise RuntimeProblem"),
+    (RUNTIME, "playability assumed without a runtime", "        return {\"status\": \"unverified\", \"runtime\": None", "        return {\"status\": \"supported\", \"runtime\": None"),
+    (RUNTIME, "session ID not unique", "\"session_id\": secrets.token_hex(16)", "\"session_id\": \"0\" * 32"),
+    (RUNTIME, "incompatible launch versions accepted", "    if LAUNCH_VERSION not in (data.get(\"launch_request_versions\") or []):", "    if False:"),
+    (PACKAGE, "malformed dependency report read",
+     "        if not isinstance(dependencies, dict) or not isinstance(dependencies.get(\"game_resources\"), list):", "        if False:"),
+    (PACKAGE, "scenarios left out of packages", "\"scenarios\": meta[\"scenarios\"], \"items\": meta[\"items\"], \"extra\"",
+     "\"scenarios\": {}, \"items\": meta[\"items\"], \"extra\""),
+    (AUTHORING, "unresolved game models reported as resolved", "            if item[\"kind\"] == \"model\" and identifier in library._models:",
+     "            if item[\"kind\"] == \"model\":"),
+    (DRIVE, "Drive Preview drives into water",
+     "        if ground is not None and self.heights.last_water and state.on_ground and abs(state.speed) > 1e-6:", "        if False:"),
+    (DRIVE, "Drive Preview claims pickups are collected",
+     "text = f\"Pickup{' ' + item if item else ''}: not collected; pickups only work in the game\"",
+     "text = f\"Picked up{' ' + item if item else ''}\""),
+    (DRIVE_GUI, "Drive Preview disclaimer weakened",
+     "\"No game physics, AI, combat, destruction, pickups or scripting run here. Use Test in Game for real behaviour.\"",
+     "\"Drive around the map.\""),
+)
+
+
 def run(workdir: Path, tests=TESTS) -> bool:
     env = dict(os.environ, PYOPENGL_PLATFORM=os.environ.get("PYOPENGL_PLATFORM", "egl"), BTGA_MUTATION_GATE="1")
     result = subprocess.run([sys.executable, "-m", "unittest", *tests], cwd=workdir, env=env, stdout=subprocess.DEVNULL,
@@ -244,7 +324,13 @@ def main() -> int:
         return 2
     plan = ([(m, TESTS) for m in MUTATIONS] + [(m, ACCEPTANCE_TESTS) for m in ACCEPTANCE_MUTATIONS]
             + [(m, PRODUCT_TESTS) for m in PRODUCT_MUTATIONS] + [(m, RELEASE_GATE_TESTS) for m in RELEASE_GATE_MUTATIONS]
-            + [(m, IMPORT_TESTS) for m in IMPORT_MUTATIONS])
+            + [(m, IMPORT_TESTS) for m in IMPORT_MUTATIONS] + [(m, AUTHORING_TESTS) for m in AUTHORING_MUTATIONS])
+    font_override = os.environ.get("BTGA_STUDIO_FONT_DIR")
+    font_source = Path(font_override) if font_override else None
+    if font_source is None or not font_source.is_dir():
+        optional = "fallback fonts not merged"
+        plan = [(mutation, tests) for mutation, tests in plan if mutation[1] != optional]
+        print(f"skipped optional mutation: {optional} (set BTGA_STUDIO_FONT_DIR to a verified staged font directory)")
     originals = {path: (ROOT / path).read_text(encoding="utf-8") for path in {m[0] for m, _ in plan}}
     with tempfile.TemporaryDirectory() as temp:
         work = Path(temp)
@@ -255,8 +341,10 @@ def main() -> int:
                 shutil.copytree(source, target, ignore=shutil.ignore_patterns("__pycache__"))
             else:
                 shutil.copy2(source, target)
+        if font_source is not None:
+            shutil.copytree(font_source, work / "private-work" / "toolchains" / "fonts")
         (work / "tools" / "__init__.py").touch()
-        for tests in (TESTS, ACCEPTANCE_TESTS, PRODUCT_TESTS, RELEASE_GATE_TESTS):
+        for tests in (TESTS, ACCEPTANCE_TESTS, PRODUCT_TESTS, RELEASE_GATE_TESTS, IMPORT_TESTS, AUTHORING_TESTS):
             if not run(work, tests):
                 print(f"baseline {' '.join(tests)} fails; refusing to judge mutations")
                 return 2

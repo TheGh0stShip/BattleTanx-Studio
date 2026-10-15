@@ -109,6 +109,24 @@ class JobTests(unittest.TestCase):
         finally:
             runner.shutdown()
 
+    def test_terminal_state_publishes_complete_failure_and_callback(self):
+        from tools.btga_studio.core.jobs import JobRunner
+
+        runner = JobRunner(workers=2)
+        callbacks = []
+        try:
+            jobs = [runner.submit(f"failure {number}", lambda context: 1 / 0, "test",
+                                  on_done=lambda job: callbacks.append(job.id))
+                    for number in range(12)]
+            runner.wait(10)
+            self.assertEqual(sorted(callbacks), [job.id for job in jobs])
+            for job in jobs:
+                self.assertEqual(job.state, "failed")
+                self.assertIn("ZeroDivisionError", job.error)
+                self.assertIn("Traceback", job.detail)
+        finally:
+            runner.shutdown()
+
 
 class LogTests(unittest.TestCase):
     def test_structured_log_and_report_hide_paths(self):

@@ -546,13 +546,17 @@ class _Mesh:
         self.materials: dict[str, int] = {}
         self.count = 0
 
-    def material(self, name: str, double_sided: bool = False) -> int:
+    def material(self, name: str, double_sided: bool = False, surface: str | None = None) -> int:
+        """``surface`` marks what the material is to drive on ("water": not drivable)."""
+
         texture = self.textures[name]
-        key = f"{name}|{double_sided}"
+        key = f"{name}|{double_sided}" + (f"|{surface}" if surface else "")
         if key not in self.materials:
             alpha = "MASK" if name in ("tree", "conifer") else "OPAQUE"
-            self.materials[key] = self.builder.material({"id": f"{texture}|{key}|city", "double_sided": double_sided, "alpha_mode": alpha,
-                                                         "texture": texture})
+            material = {"id": f"{texture}|{key}|city", "double_sided": double_sided, "alpha_mode": alpha, "texture": texture}
+            if surface:
+                material["surface"] = surface
+            self.materials[key] = self.builder.material(material)
         return self.materials[key]
 
     def point(self, east: float, y: float, north: float) -> int:
@@ -964,13 +968,20 @@ class CityBuilder:
             lambda t: NATURAL.get(t.get("natural")) if t.get("natural") != "water" else None,
             lambda t: "water" if t.get("natural") == "water" or t.get("waterway") == "riverbank" or t.get("landuse") in ("reservoir", "basin") else None,
         ]
+        # Where the water is, at 1 m per pixel: the ground over it is marked as water and barriers stop at the bank.
+        mask_size = int(round(2 * self.half))
+        self.water_mask = water = geo.Canvas(-self.half, self.half, mask_size, mask_size, 1.0, (0, 0, 0))
         for layer in layers:
             for kind, rings, _ in sorted(areas(layer), key=lambda item: -abs(geo.signed_area(item[1][0]))):
                 canvas.fill(rings, GROUND[kind], noise)
+                if kind == "water":
+                    water.fill(rings, (255, 255, 255))
         for way in self.osm.ways:
             tags = way["tags"]
             if tags.get("waterway") in ("river", "stream", "canal") and tags.get("tunnel") is None and way["coords"][0] != way["coords"][-1]:
-                canvas.line(self.project(way["coords"]), length(tags.get("width")) or (30.0 if tags["waterway"] == "river" else 4.0), GROUND["water"])
+                width = length(tags.get("width")) or (30.0 if tags["waterway"] == "river" else 4.0)
+                canvas.line(self.project(way["coords"]), width, GROUND["water"])
+                water.line(self.project(way["coords"]), width, (255, 255, 255))
         for way in self.osm.ways:
             tags = way["tags"]
             if tags.get("railway") in ("rail", "light_rail", "tram") and not tags.get("bridge") and not tags.get("tunnel"):
@@ -1063,14 +1074,16 @@ class CityBuilder:
                 grid_e, grid_n = np.meshgrid(easts, norths)
                 heights = (self.ground(np.stack([grid_e.ravel(), grid_n.ravel()], axis=1)) - self.reference).reshape(grid_e.shape)
                 mesh = _Mesh({**self.texture_ids, "ground": texture["id"]})
-                material = mesh.material("ground")
+                material, wet = mesh.material("ground"), mesh.material("ground", surface="water")
+                centres = np.stack([(grid_e[:-1, :-1] + grid_e[1:, 1:]).ravel() / 2, (grid_n[:-1, :-1] + grid_n[1:, 1:]).ravel() / 2], axis=1)
+                over_water = self.is_water(centres).reshape(steps, steps)
                 for i in range(steps):
                     for j in range(steps):
                         corners = []
                         for di, dj in ((1, 0), (1, 1), (0, 1), (0, 0)):  # south-west, south-east, north-east, north-west
                             e, n = grid_e[i + di, j + dj], grid_n[i + di, j + dj]
                             corners.append(((e - origin[0], heights[i + di, j + dj], n - origin[1]), ((j + dj) / steps, (i + di) / steps)))
-                        mesh.quad(material, corners)
+                        mesh.quad(wet if over_water[i, j] else material, corners)
                 model = self.model(f"ground {row:02d}-{column:02d}", mesh, f"{self.options.group} ground")
                 out.append((model, origin))
         return out
@@ -1265,15 +1278,32 @@ class CityBuilder:
             _walls(mesh, material, ring, ground, ground + height, None, tile=4.0)
             return ring
 
+        def beam(mesh, origin, a, b, y0, y1, half, material):
+            """A box from plan point a to plan point b (a signal mast arm)."""
+
+            ox, on = origin
+            span = math.dist(a, b) or 1.0
+            pe, pn = -(b[1] - a[1]) / span * half, (b[0] - a[0]) / span * half
+            ring = [(a[0] - pe - ox, a[1] - pn - on), (b[0] - pe - ox, b[1] - pn - on), (b[0] + pe - ox, b[1] + pn - on), (a[0] + pe - ox, a[1] + pn - on)]
+            if geo.signed_area(ring) < 0:
+                ring.reverse()
+            _walls(mesh, material, ring, y0, y1, None, tile=4.0)
+            _cap(mesh, material, ring, [], y1, None)
+            _cap(mesh, material, ring, [], y0, None, down=True)
+
         points = []
         for node in self.osm.nodes:
             kind = node["tags"].get("highway") or node["tags"].get("man_made")
-            if kind in ("street_lamp", "traffic_signals"):
+            if kind == "street_lamp":
                 e, n = self.projection.forward(node["lat"], node["lon"])
                 if self.inside((float(e), float(n)), 2.0):
-                    points.append((kind, float(e), float(n)))
-        grounds = self.ground([p[1:] for p in points]) - self.reference if points else []
-        for (kind, e, n), ground in zip(points, grounds):
+                    points.append((kind, float(e), float(n), None))
+            elif kind == "traffic_signals":
+                for e, n, arm in self._signal_poles(node):
+                    if self.inside((e, n), 2.0) and not any(p[0] == kind and math.hypot(p[1] - e, p[2] - n) < 5.0 for p in points):
+                        points.append((kind, e, n, arm))
+        grounds = self.ground([p[1:3] for p in points]) - self.reference if points else []
+        for (kind, e, n, arm), ground in zip(points, grounds):
             mesh, origin = mesh_at((e, n))
             metal = mesh.material("metal")
             if kind == "street_lamp":
@@ -1281,10 +1311,12 @@ class CityBuilder:
                 head = post(mesh, origin, e, n, ground + 7.6, 0.5, 0.45, mesh.material("lamp"))
                 _cap(mesh, mesh.material("lamp"), head, [], ground + 7.6, None, down=True)
                 counts["lamps"] += 1
-            else:
-                post(mesh, origin, e, n, ground, 5.0, 0.15, metal)
-                box = post(mesh, origin, e, n, ground + 4.0, 1.2, 0.35, mesh.material("signal"))
-                _cap(mesh, metal, box, [], ground + 5.2, None)
+            else:  # a pole on the corner with a mast arm reaching over the road and the lights hanging at its end
+                post(mesh, origin, e, n, ground, 6.4, 0.15, metal)
+                tip = (e + arm[0], n + arm[1])
+                beam(mesh, origin, (e, n), tip, ground + 6.0, ground + 6.2, 0.08, metal)
+                box = post(mesh, origin, tip[0], tip[1], ground + 4.9, 1.1, 0.3, mesh.material("signal"))
+                _cap(mesh, metal, box, [], ground + 6.0, None)
                 counts["signals"] += 1
         styles = {"wall": (2.0, "concrete"), "city_wall": (3.0, "stone"), "retaining_wall": (1.5, "concrete"), "fence": (1.6, "fence"),
                   "hedge": (1.4, "hedge")}
@@ -1298,9 +1330,10 @@ class CityBuilder:
             height, texture = styles[barrier]
             height = length(way["tags"].get("height")) or height
             ground = self.ground(points) - self.reference
-            for (a, b), ga, gb in zip(zip(points[:-1], points[1:]), ground[:-1], ground[1:]):
-                if math.dist(a, b) < 0.1:
-                    continue
+            wet = self.is_water([((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) for a, b in zip(points[:-1], points[1:])])
+            for (a, b), ga, gb, over_water in zip(zip(points[:-1], points[1:]), ground[:-1], ground[1:], wet):
+                if math.dist(a, b) < 0.1 or over_water:
+                    continue  # mapped barriers that cross a river (lock and dam lines, survey fences) are not built over the water
                 mesh, (ox, on) = mesh_at(((a[0] + b[0]) / 2, (a[1] + b[1]) / 2))
                 material = mesh.material(texture, True)
                 span = math.dist(a, b)
@@ -1313,6 +1346,70 @@ class CityBuilder:
             if not mesh.empty():
                 out.append((self.model(f"street {key[0]:02d}-{key[1]:02d}", mesh, f"{self.options.group} street"), self._chunk_origin(key)))
         return out, counts
+
+    def is_water(self, points) -> np.ndarray:
+        """True for (east, north) points over a river or lake (after ``paint``)."""
+
+        mask = getattr(self, "water_mask", None)
+        points = np.asarray(points, float).reshape(-1, 2)
+        if mask is None or not len(points):
+            return np.zeros(len(points), bool)
+        pixels = np.floor(mask.to_pixels(points)).astype(np.int64)
+        height, width = mask.pixels.shape[:2]
+        inside = (pixels[:, 0] >= 0) & (pixels[:, 0] < width) & (pixels[:, 1] >= 0) & (pixels[:, 1] < height)
+        out = np.zeros(len(points), bool)
+        out[inside] = mask.pixels[pixels[inside, 1], pixels[inside, 0], 0] > 127
+        return out
+
+    def _road_index(self) -> dict:
+        """Road centreline points -> [(neighbour point, road width m)] for every road through them (both projected)."""
+
+        if getattr(self, "_roads", None) is None:
+            self._roads = {}
+            for way in self.osm.ways:
+                highway = way["tags"].get("highway")
+                if highway not in ROAD_WIDTH or highway in ("pedestrian", "track"):
+                    continue
+                width = length(way["tags"].get("width")) or ROAD_WIDTH[highway]
+                coords = way["coords"]
+                for k, point in enumerate(coords):
+                    for j in (k - 1, k + 1):
+                        if 0 <= j < len(coords) and coords[j] != point:
+                            self._roads.setdefault(tuple(point), []).append((coords[j], width))
+        return self._roads
+
+    def _signal_poles(self, node) -> list[tuple[float, float, tuple[float, float]]]:
+        """Traffic-signal poles for a signal mapped on a road: (east, north, mast arm vector) at the kerb corners.
+
+        OpenStreetMap puts traffic_signals on the road centreline (at the junction or on each approach); the
+        real poles stand on the corners with arms over the carriageway.
+        """
+
+        e, n = (float(v) for v in self.projection.forward(node["lat"], node["lon"]))
+        roads = self._road_index().get((node["lat"], node["lon"]))
+        if not roads:
+            return [(e, n, (0.0, 0.0))]  # mapped beside the road already
+        projected = self.project([p for p, _ in roads])
+        spokes = sorted((math.atan2(pn - n, pe - e), width) for (pe, pn), (_, width) in zip(projected, roads))
+        out = []
+        if len(spokes) == 1:  # the end of a mapped road: treat it as running straight through
+            spokes.append((spokes[0][0] + math.pi, spokes[0][1]))
+        for k, (angle, width) in enumerate(spokes):
+            next_angle, next_width = spokes[(k + 1) % len(spokes)]
+            gap = (next_angle - angle) % (2 * math.pi)
+            if gap < math.radians(20):
+                continue  # two ways leaving the same way (a divided road): no corner between them
+            half = max(width, next_width) / 2 + 1.5
+            if gap > math.radians(160):  # a straight run: one pole either side, offset square to the road
+                middle = angle + math.pi / 2
+                distance = half
+            else:
+                middle = angle + gap / 2
+                distance = min(half / math.sin(gap / 2), 3 * half)
+            pe, pn = e + math.cos(middle) * distance, n + math.sin(middle) * distance
+            reach = min(distance - 1.0, max(width, next_width) * 0.6)
+            out.append((pe, pn, (-math.cos(middle) * reach, -math.sin(middle) * reach)))
+        return out
 
     def _chunk_key(self, point) -> tuple[int, int]:
         chunk = self.options.chunk_m

@@ -26,7 +26,7 @@ from tools.btga_assets import export as ex  # noqa: E402
 from tools.btga_assets import mesh as meshmod  # noqa: E402
 from tools.btga_assets.semantics import SCENE_SCHEMA_VERSION, field, marker  # noqa: E402
 
-STARTER_VERSION = 2  # 2 added the teleporter templates and their marker models
+STARTER_VERSION = 3  # 2 added the teleporter templates; 3 trigger volumes, zones, destructible targets, bots and item pickups
 ID_VERSION = 1  # content IDs keep the version-1 seed, so existing projects still resolve every starter model and texture
 PLATFORM = "studio"
 
@@ -181,7 +181,18 @@ def starter_meshes(textures: dict[str, dict]) -> dict[str, tuple[dict, str]]:
     tank = _merge(_builder_from_quads(_box_quads((-35, 0, -55), (35, 30, 55)), t["checker_grey"]),
                   _builder_from_quads(_box_quads((-22, 30, -20), (22, 50, 22)), t["concrete"]),
                   _builder_from_quads(_box_quads((-4, 38, -90), (4, 44, -20)), t["concrete"]))
+    trigger = _merge(*[_builder_from_quads(_box_quads((x - 4, 0, z - 4), (x + 4, 60, z + 4)), t["solid_yellow"])
+                       for x, z in ((-50, -50), (50, -50), (50, 50), (-50, 50))],
+                     _builder_from_quads(_box_quads((-54, 56, -54), (54, 60, 54)), t["solid_yellow"]))
+    capture = _merge(_builder_from_quads(_box_quads((-70, 0, -70), (70, 3, 70)), t["solid_blue"]), flag)
+    destructible = _merge(_builder_from_quads(_box_quads((-30, 0, -30), (30, 60, 30)), t["solid_orange"]),
+                          _builder_from_quads(_box_quads((-32, 26, -32), (32, 34, 32)), t["checker_grey"]))
+    item = _merge(_pyramid(22, 34, t["solid_white"]), _builder_from_quads(_box_quads((-26, 0, -26), (26, 4, 26)), t["checker_green"]))
     return {
+        "marker_trigger": (trigger, "Markers"),
+        "marker_capture": (capture, "Markers"),
+        "marker_destructible": (destructible, "Markers"),
+        "marker_item": (item, "Markers"),
         "ground_tile": (_builder_from_quads([([(-256, 0, 256), (256, 0, 256), (256, 0, -256), (-256, 0, -256)], [(0, 0), (8, 0), (8, 8), (0, 8)])], t["grass"], True), "Terrain"),
         "ground_tile_concrete": (_builder_from_quads([([(-256, 0, 256), (256, 0, 256), (256, 0, -256), (-256, 0, -256)], [(0, 0), (4, 0), (4, 4), (0, 4)])], t["concrete"], True), "Terrain"),
         "road_straight": (_builder_from_quads([([(-64, 0.5, 256), (64, 0.5, 256), (64, 0.5, -256), (-64, 0.5, -256)], [(0, 0), (1, 0), (1, 4), (0, 4)])], t["road"], True), "Roads"),
@@ -261,6 +272,56 @@ def gameplay_templates(models: dict[str, dict]) -> list[dict]:
         template("teleport_exit", "teleport_exit", {"label": _studio("Teleport exit", "text", "name shown in the editor", legal=(0, 64))},
                  "marker_teleport_exit"),
         template("nav_node", "navigation_node", {f"link_{i}": _studio(None, "ref", f"linked navigation node {i}") for i in range(4)}, "marker_pickup"),
+        template("trigger_volume", "trigger_volume", {
+            "shape": _studio(0, "u8", "volume shape", enum={0: "circle", 1: "box"}, closed=True),
+            "radius": _studio(150, "u16", "circle radius (world units)", legal=(10, 8000)),
+            "half_x": _studio(150, "u16", "box half-width across (world units)", legal=(10, 8000)),
+            "half_z": _studio(150, "u16", "box half-depth (world units)", legal=(10, 8000)),
+            "height": _studio(400, "u16", "height above its base (world units)", legal=(10, 16000)),
+            "label": _studio("Trigger volume", "text", "name shown in the editor and scenario graph", legal=(0, 48)),
+        }, "marker_trigger"),
+        template("capture_zone", "capture_zone", {
+            "zone_mode": _studio(0, "u8", "what the zone is for", enum={0: "capture", 1: "defend", 2: "king of the hill"}, closed=True),
+            "radius": _studio(250, "u16", "zone radius (world units)", legal=(20, 8000)),
+            "owner": _studio(255, "u8", "team owning it at the start", legal=TEAM, sentinel={255: "neutral"}),
+            "label": _studio("Zone", "text", "name shown in the editor and scenario graph", legal=(0, 48)),
+        }, "marker_capture"),
+        template("destructible_target", "destructible_target", {
+            "health": _studio(500, "u16", "hit points", legal=(1, 60000)),
+            "owner": _studio(255, "u8", "team it belongs to", legal=TEAM, sentinel={255: "nobody"}),
+            "score": _studio(250, "u16", "points for destroying it", legal=(0, 60000)),
+            "respawn_seconds": _studio(0, "u16", "seconds until it is rebuilt (0 = never)", legal=(0, 3600)),
+            "model": _studio("", "text", "content ID of the intact model (empty: the editor marker)", legal=(0, 96)),
+            "destroyed_model": _studio("", "text", "content ID of the wreck (empty: nothing remains)", legal=(0, 96)),
+            "label": _studio("Target", "text", "name shown in the editor and scenario graph", legal=(0, 48)),
+        }, "marker_destructible"),
+        template("bot", "bot_slot", {
+            "ai_slot": _studio(0, "u8", "AI slot the bot claims", legal=(0, 63)),
+            "kind": _studio(0, "u8", "what it is", enum={0: "tank", 1: "Queenlord"}, closed=True),
+            "model": _studio("", "text", "content ID of the model it is drawn with", legal=(0, 96)),
+            "team": _studio(1, "u8", "team", legal=TEAM),
+            "role": _studio(0, "u8", "behaviour", enum={0: "attack", 1: "defend", 2: "patrol", 3: "capture", 4: "escort", 5: "support", 6: "boss"},
+                            closed=True),
+            "aggression": _studio(50, "u8", "aggression (0 cautious - 100 reckless)", legal=(0, 100)),
+            "patrol_start": _studio(None, "ref", "navigation point its patrol starts from"),
+            "guard_target": _studio(None, "ref", "what it defends"),
+            "capture_target": _studio(None, "ref", "zone it captures"),
+            "escort_target": _studio(None, "ref", "bot or object it escorts or supports"),
+            "respawn": _studio(0, "u8", "respawn", enum={0: "never", 1: "after a delay", 2: "with its wave"}, closed=True),
+            "respawn_seconds": _studio(20, "u16", "seconds before it respawns", legal=(0, 3600)),
+            "spawn_delay_seconds": _studio(0, "u16", "seconds after the start before it appears", legal=(0, 3600)),
+            "capture_behavior": _studio(0, "u8", "what it does with zones", enum={0: "ignore zones", 1: "capture and hold", 2: "contest only"},
+                                        closed=True),
+            "allowed_weapons": _studio(63, "u8", "weapons it may use (cannon, machine gun, rockets, guided missiles, mines, special)",
+                                       legal=(1, 63), bits=6),
+        }, "tank_placeholder"),
+        template("item_pickup", "item_pickup", {
+            "item": _studio("", "text", "item definition this pickup gives", legal=(0, 48)),
+            "quantity": _studio(1, "u8", "how many it gives each time", legal=(1, 99)),
+            "respawn_seconds": _studio(30, "u16", "seconds until it comes back (0 = never)", legal=(0, 3600)),
+            "uses": _studio(0, "u16", "times it can be picked up", legal=(1, 999), sentinel={0: "unlimited"}),
+            "team": _studio(255, "u8", "team allowed to pick it up", legal=TEAM, sentinel={255: "any team"}),
+        }, "marker_item"),
     ]
 
 

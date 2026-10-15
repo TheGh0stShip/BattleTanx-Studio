@@ -7,10 +7,28 @@ BattleTanx: Global Assault. It uses one neutral resource model for:
 - BattleTanx: Global Assault (Nintendo 64)
 - BattleTanx: Global Assault (PlayStation)
 
+## In the editor
+
+An original Global Assault map loaded from a locally owned cartridge:
+
+![Paris - Crossfire open in BattleTanx Studio](docs/images/studio-global-assault-crossfire.png)
+
+A high-detail Minneapolis project combining imported city data with Global
+Assault tanks, barriers, pickups, team bases, bots, and scenario objects:
+
+![Custom Minneapolis map using Global Assault content](docs/images/studio-minneapolis-btga.png)
+
+Studio can author scenarios, objective graphs, triggers, custom pickups, bot
+roles, patrols, capture zones, destructible targets, and reusable item effects.
+**Drive Preview** is an editor-scale and collision check, not game simulation.
+The separate **Test in Game** command remains disabled until a compatible PC
+runtime declares support for every feature used by the project.
+
 The repository contains the graphical editor, deterministic asset decoders,
 map semantics, non-destructive edit overlays, glTF export, comparison tools,
 and synthetic tests. It does **not** contain ROMs, disc images, extracted game
-assets, or generated previews. Supply game data you legally control locally.
+assets, or playable game content. Supply game data you legally control locally.
+The interface screenshots below are documentation only.
 
 ## For players and map makers (Windows)
 
@@ -92,6 +110,9 @@ does not open an additional command window. Details are in
 ## Documentation
 
 - [Editor workflow and controls](docs/BTGA_STUDIO_EDITOR.md)
+- [Scenario, bot, item, and map authoring model](docs/STUDIO_AUTHORING.md)
+- [Test in Game runtime contract](docs/RUNTIME_LAUNCH.md)
+- [Runtime feature-support matrix](docs/RUNTIME_FEATURES.md)
 - [Studio resource API](docs/STUDIO_RESOURCE_API.md)
 - [Custom-content package contract](docs/CONTENT_PACKAGE.md)
 - [Neutral resource contract](docs/PS1_RESOURCE_CONTRACT.md)

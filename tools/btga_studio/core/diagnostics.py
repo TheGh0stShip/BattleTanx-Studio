@@ -2,7 +2,8 @@
 
 Combines overlay.validate with editor checks: dangling model/texture
 references, spawn points inside collision, overlapping team starts,
-spawner masks, minimap transforms and edits that touch unresolved records.
+spawner masks, minimap transforms, edits that touch unresolved records and
+bot slots (``core.bots``).
 Every diagnostic names its target record so the panel can select and frame it.
 """
 
@@ -104,6 +105,10 @@ def collect(document, library) -> list[Diagnostic]:
         root = library.root_for_model(record["model"]) if entry is not None and hasattr(library, "root_for_model") else library.root
         if entry is not None and not (root / entry["file"]).is_file():
             out.append(Diagnostic("error", "MISSING_SOURCE_ASSET", f"model file for {record['model']} is missing", record["id"]))
+    from .bots import check_bots
+
+    for problem in check_bots(document, library):
+        out.append(Diagnostic(problem.severity, problem.code, problem.message, problem.target, problem.field))
     unique = []
     keys = set()
     for diagnostic in out:

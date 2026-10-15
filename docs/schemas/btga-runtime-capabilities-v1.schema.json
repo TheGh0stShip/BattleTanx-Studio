@@ -1,0 +1,20 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "btga-runtime-capabilities-v1",
+ "title": "PC runtime capabilities for BattleTanx Studio, version 1",
+ "description": "btga-runtime.json next to the runtime program. Studio reads it (at most 1 MiB) and never executes the program to ask. Reference reader: tools/btga_studio/core/runtime.py read_capabilities.",
+ "type": "object",
+ "required": ["schema", "schema_version", "runtime", "launch_request_versions", "package_schema_versions", "features"],
+ "properties": {
+  "schema": {"const": "btga-runtime-capabilities"},
+  "schema_version": {"const": 1},
+  "runtime": {"type": "object", "required": ["name", "version"], "properties": {"name": {"type": "string"}, "version": {"type": "string"}}},
+  "launch_request_versions": {"type": "array", "items": {"type": "integer"}, "contains": {"const": 1}},
+  "package_schema_versions": {"type": "array", "items": {"type": "integer"}, "contains": {"const": 1}},
+  "games": {"type": "array", "items": {"enum": ["n64_btga", "n64_bt1", "ps1"]}},
+  "features": {"type": "array", "items": {"type": "string"}, "description": "Features the runtime plays (names from docs/RUNTIME_FEATURES.md)."},
+  "bot_slots": {"type": "integer", "minimum": 0, "maximum": 64},
+  "teams": {"type": "integer", "minimum": 0, "maximum": 64},
+  "capture_modes": {"type": "array", "items": {"enum": ["none", "screenshot", "video"]}}
+ }
+}

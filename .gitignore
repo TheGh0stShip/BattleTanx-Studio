@@ -9,6 +9,7 @@
 *.glb
 *.gltf
 *.png
+!docs/images/studio-*.png
 !docs/media/*.png
 *.bmp
 *.tga

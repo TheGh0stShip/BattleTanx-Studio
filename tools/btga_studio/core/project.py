@@ -1,19 +1,22 @@
-"""BattleTanx Studio project files (``btga-studio-project`` v2).
+"""BattleTanx Studio project files (``btga-studio-project`` v3).
 
 A project is human-readable, sorted JSON.  It references source content only
 by content-derived IDs and source hashes, never by path, and embeds no game
 data:
 
-    {"schema": "btga-studio-project", "schema_version": 2,
+    {"schema": "btga-studio-project", "schema_version": 3,
      "project": {id, title, description, target: {game, package}},
      "dependencies": {sources: [...], starter: N},
      "maps": {key: {kind: "imported" | "blank", title, scene, source_fingerprint?,
                     base? (blank maps: bounds, environment), overlay, history, view, minimap}},
      "campaigns": [...], "missions": {...}, "multiplayer": {...}, "minigames": {...},
-     "tanks": {...}, "gangs": {...}, "extra": {...}}
+     "tanks": {...}, "gangs": {...}, "scenarios": {...}, "items": {...}, "extra": {...}}
 
-Version 1 files (one scene plus overlay) migrate to one imported map
-``main``.  Newer versions are refused.  Unknown keys at project and map
+``scenarios`` (``core.scenario``) and ``items`` (``core.items``) were added in
+version 3.  Version 2 files migrate by turning each mission into an
+equivalent scenario (its map, briefing and objective markers) and linking
+the mission to it; version 1 files (one scene plus overlay) first migrate to
+one imported map ``main``.  Newer versions are refused.  Unknown keys at project and map
 level are carried through unchanged.  Undo and redo history is saved per
 map, so it survives save and reload.  Opening an imported map whose source
 fingerprint differs raises ``ProjectMismatch``.
@@ -38,14 +41,14 @@ from .history import DefinitionHistory, observe
 from .scene import EditorScene
 
 PROJECT_SCHEMA = "btga-studio-project"
-PROJECT_VERSION = 2
-SUPPORTED_VERSIONS = (1, 2)
+PROJECT_VERSION = 3
+SUPPORTED_VERSIONS = (1, 2, 3)
 TARGET_GAMES = ("studio", "n64_btga", "n64_bt1", "ps1")
 KEY = re.compile(r"^[a-z0-9][a-z0-9_]{0,47}$")
 KNOWN_TOP = {"schema", "schema_version", "project", "dependencies", "maps", "campaigns", "missions", "multiplayer", "minigames",
-             "tanks", "gangs", "extra", "definition_history"}
+             "tanks", "gangs", "scenarios", "items", "extra", "definition_history"}
 KNOWN_MAP = {"kind", "title", "scene", "source_fingerprint", "base", "overlay", "history", "view", "minimap", "extra"}
-DEFINITION_FAMILIES = ("missions", "multiplayer", "minigames", "tanks", "gangs")
+DEFINITION_FAMILIES = ("missions", "multiplayer", "minigames", "tanks", "gangs", "scenarios", "items")
 MAX_TEXT = 200
 
 
@@ -224,6 +227,8 @@ class StudioProject:
         self.minigames: dict[str, dict] = {}
         self.tanks: dict[str, dict] = {}
         self.gangs: dict[str, dict] = {}
+        self.scenarios: dict[str, dict] = {}
+        self.items: dict[str, dict] = {}
         self.extra: dict = {}
         self.unknown: dict = {}
         self.path: Path | None = None
@@ -349,7 +354,33 @@ class StudioProject:
 
         if self._saved_content is None:
             return True
-        return _content(json.loads(dumps(self))) != self._saved_content
+        key = self._change_key()
+        cached = getattr(self, "_dirty_cache", None)
+        if cached is not None and cached[0] == key and cached[1] == id(self._saved_content):
+            return cached[2]
+        value = _content(json.loads(dumps(self))) != self._saved_content
+        self._dirty_cache = (key, id(self._saved_content), value)
+        return value
+
+    def _change_key(self) -> str:
+        """Cheap fingerprint of everything that can change the saved content.
+
+        Serialising a city-sized project takes seconds, so ``dirty`` only does
+        it when this key changes: the small project data in full, and for each
+        open map its edit count, undo position and hidden/locked sets (edits are
+        only appended or removed, and every commit gets a new token).  Closed
+        maps cannot change without being opened.
+        """
+
+        maps = []
+        for key, entry in sorted(self.maps.items()):
+            document = entry.document
+            live = ([len(document.overlay.edits), document.current_token, sorted(document.hidden), sorted(document.locked)]
+                    if document is not None else [id(entry.overlay), entry.view])
+            maps.append([key, entry.kind, entry.title, entry.scene, entry.source_fingerprint, entry.minimap, entry.base, entry.extra, live])
+        small = [self.project, self.dependencies, self.campaigns, self.missions, self.multiplayer, self.minigames, self.tanks, self.gangs,
+                 self.scenarios, self.items, self.extra, self.unknown]
+        return json.dumps([small, maps], sort_keys=True, default=str)
 
     # -- definitions -------------------------------------------------------------------------
     def define(self, family: str, key: str, data: dict) -> None:
@@ -424,9 +455,21 @@ class StudioProject:
             for edit in edits:
                 if edit["op"] == "add_instance":
                     platforms.add(edit["instance"]["model"].split(":", 1)[0])
+            for edit in edits:  # models chosen in bot and destructible-target fields
+                if edit["op"] == "add_marker":
+                    model = ((edit["marker"].get("fields") or {}).get("model") or {}).get("value")
+                elif edit["op"] == "set_field" and edit.get("field") in ("model", "destroyed_model"):
+                    model = edit.get("value")
+                else:
+                    continue
+                if isinstance(model, str) and ":" in model:
+                    platforms.add(model.split(":", 1)[0])
         for tank in self.tanks.values():
             if isinstance(tank.get("model"), str):
                 platforms.add(tank["model"].split(":", 1)[0])
+        for item in self.items.values():
+            if isinstance(item, dict) and isinstance(item.get("model"), str) and item["model"]:
+                platforms.add(item["model"].split(":", 1)[0])
         needed = {}
         for platform in sorted(platforms - {"studio", "user", "common"}):
             for source in sources_by_platform.get(platform, []):
@@ -442,7 +485,7 @@ class StudioProject:
             "schema": PROJECT_SCHEMA, "schema_version": PROJECT_VERSION, "project": self.project, "dependencies": self.dependencies,
             "maps": {key: entry.as_dict() for key, entry in sorted(self.maps.items())},
             "campaigns": self.campaigns, "missions": self.missions, "multiplayer": self.multiplayer, "minigames": self.minigames,
-            "tanks": self.tanks, "gangs": self.gangs,
+            "tanks": self.tanks, "gangs": self.gangs, "scenarios": self.scenarios, "items": self.items,
         }
         if self.extra:
             data["extra"] = self.extra
@@ -466,6 +509,8 @@ class StudioProject:
             raise ProjectError(f"project schema {version} is not supported")
         if version == 1:
             data = migrate_v1(data)
+        if data.get("schema_version") == 2:
+            data = migrate_v2(data)
         info = data.get("project") or {}
         if not isinstance(info, dict) or not isinstance(info.get("target") or {}, dict):
             raise ProjectError("project: metadata must be an object")
@@ -554,6 +599,25 @@ def _content(data: dict) -> str:
     data.pop("definition_history", None)
     data["maps"] = {key: {k: v for k, v in entry.items() if k != "history"} for key, entry in (data.get("maps") or {}).items()}
     return json.dumps(data, sort_keys=True, ensure_ascii=False)
+
+
+def migrate_v2(data: dict) -> dict:
+    """v2 -> v3: each mission becomes an equivalent scenario (same key) and names it; no item definitions yet."""
+
+    from . import scenario as scenario_module
+
+    data = copy.deepcopy(data)
+    data["schema_version"] = 3
+    scenarios = data.get("scenarios") if isinstance(data.get("scenarios"), dict) else {}
+    missions = data.get("missions") if isinstance(data.get("missions"), dict) else {}
+    for key, mission in sorted(missions.items()):
+        if not isinstance(mission, dict) or key in scenarios:
+            continue
+        scenarios[key] = scenario_module.from_mission(key, mission)
+        mission["scenario"] = key
+    data["scenarios"] = scenarios
+    data.setdefault("items", {})
+    return data
 
 
 def migrate_v1(data: dict) -> dict:

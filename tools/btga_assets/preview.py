@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 
+from .mesh import with_game_lighting
 from .ps1_formats import encode_png_rgba
 
 BACKGROUND = (40, 40, 48, 255)
@@ -53,6 +54,7 @@ def render(meshes: list[tuple[dict, list[float], int]], textures: dict[str, dict
     frame = bytearray(BACKGROUND * (width * height))
 
     for mesh, translation, yaw in meshes:
+        mesh = with_game_lighting(mesh)
         theta = (yaw & 0xFFFF) * 2 * math.pi / 65536
         c, s = math.cos(theta), math.sin(theta)
         world = [[x * c + z * s + translation[0], y + translation[1], -x * s + z * c + translation[2]] for x, y, z in mesh["positions"]]

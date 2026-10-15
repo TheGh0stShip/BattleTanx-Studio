@@ -17,7 +17,7 @@ Everything else a user edits in the Gameplay editor goes through one
   without the two histories ever touching each other's data.
 
 The state covers project title and description, campaigns, missions,
-multiplayer, minigames, tanks, gangs, each map's title and minimap settings,
+multiplayer, minigames, tanks, gangs, scenarios, item definitions, each map's title and minimap settings,
 and the size and sky colour of original maps.  Unknown keys and imported
 source data are never part of it, so undo cannot alter them.  Prefab files
 are recorded as before/after file contents.
@@ -57,7 +57,7 @@ def observe(sequence: int) -> None:
         _highest[0] = max(_highest[0], int(sequence))
 
 
-FAMILIES = ("campaigns", "missions", "multiplayer", "minigames", "tanks", "gangs")
+FAMILIES = ("campaigns", "missions", "multiplayer", "minigames", "tanks", "gangs", "scenarios", "items")
 
 
 def capture(project) -> dict:

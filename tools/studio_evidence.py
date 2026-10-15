@@ -16,6 +16,8 @@ to the network; git is used read-only (``rev-parse``, ``diff``, ``ls-files``).
 * ``write_record(png, ...)``: the adjacent JSON evidence record.
 * ``manifest(directory)`` / ``compare_manifests(a, b)``: deterministic
   per-file SHA-256 listings and their differences.
+* ``EvidenceSession``: a folder of screenshots with automatic checks,
+  records, an index, recorded visual reviews and a stale-source check.
 
 Limits: files are hashed in 1 MiB chunks (constant memory); image checks
 hold one framebuffer in memory.  Paths in returned records are relative.
@@ -154,6 +156,60 @@ def compare_manifests(first: dict, second: dict) -> dict:
 
     return {"only_first": sorted(set(first) - set(second)), "only_second": sorted(set(second) - set(first)),
             "different": sorted(k for k in set(first) & set(second) if first[k] != second[k])}
+
+
+class EvidenceSession:
+    """A folder of reviewed screenshots: each shot gets automatic checks and an adjacent record, and ``index.json`` lists them all.
+
+    ``ui`` is anything with ``pixels() -> (width, height, rgba)`` and ``screenshot(path)`` (Studio's ``OffscreenUI``).
+    ``evidence_class`` separates evidence made with the user's own game data ("real-rom") from synthetic evidence;
+    ``source_facts`` records identities only (hashes, catalog fingerprints), never paths.  ``finish`` re-checks the
+    source identity: if the tree changed while capturing, every record is marked stale.
+    """
+
+    def __init__(self, directory: Path, root: Path, evidence_class: str, source_facts: dict | None = None):
+        self.directory = Path(directory)
+        self.directory.mkdir(parents=True, exist_ok=True)
+        self.root = Path(root)
+        self.identity = source_identity(self.root)
+        self.evidence_class = evidence_class
+        self.source_facts = dict(source_facts or {})
+        self.shots: list[dict] = []
+
+    def shoot(self, ui, name: str, scenario: str, expected: str, region=None, notes: str = "", **extra) -> dict:
+        number = len(self.shots) + 1
+        png = self.directory / f"{number:02d}_{name}.png"
+        width, height, rgba = ui.pixels()
+        stats = image_stats(width, height, rgba, region)
+        problems = inspect_image(stats)
+        ui.screenshot(png)
+        write_record(png, self.identity, scenario, expected, f"automatic: {stats['unique_colours']} colours", not problems,
+                     notes or ("automatic checks only; pending visual review" if not problems else "; ".join(problems)), stats=stats,
+                     evidence_class=self.evidence_class, source_facts=self.source_facts, visual_review="pending", **extra)
+        item = {"file": png.name, "scenario": scenario, "expected": expected, "automatic_problems": problems, "visual_review": "pending"}
+        self.shots.append(item)
+        return item
+
+    def review(self, file: str, verdict: str, notes: str) -> None:
+        """Record a human visual review ("accepted" or "rejected") in the shot's record and the index."""
+
+        if verdict not in ("accepted", "rejected"):
+            raise ValueError("verdict must be accepted or rejected")
+        record_path = (self.directory / file).with_suffix(".json")
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        record.update({"visual_review": verdict, "reviewer_notes": notes, "result": "pass" if verdict == "accepted" and record["result"] == "pass" else "fail"})
+        record_path.write_text(json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+        for item in self.shots:
+            if item["file"] == file:
+                item.update({"visual_review": verdict, "reviewer_notes": notes})
+
+    def finish(self) -> dict:
+        current = source_identity(self.root)
+        is_stale = (current["commit"], current["tree_sha256"]) != (self.identity["commit"], self.identity["tree_sha256"])
+        index = {"source_revision": self.identity, "evidence_class": self.evidence_class, "source_facts": self.source_facts,
+                 "stale": is_stale, "shots": self.shots}
+        (self.directory / "index.json").write_text(json.dumps(index, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+        return index
 
 
 def timestamp() -> str:

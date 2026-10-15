@@ -10,6 +10,7 @@ references to game-derived resources extracted locally by the user.
 ```
 manifest.json
 project.json
+dependencies.json
 maps/<map-key>.json
 resources/models/<content-id>.json
 resources/textures/<content-id>.rgba
@@ -21,6 +22,23 @@ UTF-8 text. The manifest records schema versions, required source hashes, refere
 resources, and every member's size and SHA-256. Archive names, timestamps,
 ordering, permissions, and compression settings are fixed so identical inputs
 produce identical bytes.
+
+`project.json` carries the project's campaigns, missions, multiplayer
+setups, minigames, tanks, gangs, **scenarios** and **item definitions**
+(`STUDIO_AUTHORING.md`). `dependencies.json` (`btga-dependency-report` v1)
+lists every game resource the content needs and the package does not embed:
+scenes and models by content ID, the records and definitions that use each,
+whether the exporting Studio resolved it, and the cartridge SHA-256 it comes
+from; plus the Studio and user resources that are embedded. An unresolved game
+resource is a validation error, so an exported package never lists one as
+unresolved.
+
+The manifest adds `features_required` (every runtime feature the content
+uses, see `RUNTIME_FEATURES.md`) and `playability`: `"unverified"` when no
+runtime declared its capabilities to the exporting Studio, `"supported"` when
+the configured runtime declares every feature, `"unsupported"` with the
+missing features otherwise. A package is never marked playable without a
+runtime declaring it.
 
 Texture resources begin with little-endian `u16 width` and `u16 height`, then
 contain exactly `width * height * 4` RGBA8 bytes. Model resources use the
@@ -73,7 +91,12 @@ A runtime reader must fail closed when:
 - a resource has invalid dimensions;
 - a placed record is malformed, belongs to an unknown record family, or lies
   outside map bounds; or
-- required local source hashes do not match.
+- required local source hashes do not match; or
+- `dependencies.json` is present but not a dependency report, or
+  `project.json`'s `scenarios` or `items` is not an object.
+
+A runtime must also refuse to play content whose `features_required` it does
+not implement, instead of ignoring the parts it does not understand.
 
 The reference implementation is `tools/btga_studio/core/package.py`. Studio
 currently writes packages but does not patch or deploy them into the game.

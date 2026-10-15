@@ -10,7 +10,7 @@
  ],
  "dependencies": {
   "sources": [],
-  "starter": 2
+  "starter": 3
  },
  "gangs": {
   "blue_team": {
@@ -35,6 +35,42 @@
     "scout"
    ],
    "title": "Red team"
+  }
+ },
+ "items": {
+  "repair_kit": {
+   "category": "health",
+   "duration_seconds": 0,
+   "effects": [
+    {
+     "amount": 50,
+     "do": "modify_stat",
+     "mode": "add",
+     "stat": "health"
+    }
+   ],
+   "icon": "studio:icon:repair",
+   "max_stack": 1,
+   "model": null,
+   "stacking": "none",
+   "title": "Repair kit"
+  },
+  "speed_boost": {
+   "category": "modifier",
+   "duration_seconds": 15,
+   "effects": [
+    {
+     "do": "timed_modifier",
+     "factor": 1.5,
+     "seconds": 15,
+     "stat": "speed"
+    }
+   ],
+   "icon": "studio:icon:boost",
+   "max_stack": 1,
+   "model": null,
+   "stacking": "refresh",
+   "title": "Speed boost"
   }
  },
  "maps": {
@@ -99,7 +135,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 35,
+      "sequence": 44,
       "user_index_after": 1,
       "user_index_before": 0
      },
@@ -109,7 +145,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 36,
+      "sequence": 45,
       "user_index_after": 2,
       "user_index_before": 1
      },
@@ -119,7 +155,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 37,
+      "sequence": 46,
       "user_index_after": 3,
       "user_index_before": 2
      },
@@ -129,7 +165,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 38,
+      "sequence": 47,
       "user_index_after": 4,
       "user_index_before": 3
      },
@@ -139,7 +175,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 39,
+      "sequence": 48,
       "user_index_after": 5,
       "user_index_before": 4
      },
@@ -149,7 +185,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 40,
+      "sequence": 49,
       "user_index_after": 6,
       "user_index_before": 5
      },
@@ -159,7 +195,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 41,
+      "sequence": 50,
       "user_index_after": 7,
       "user_index_before": 6
      },
@@ -169,7 +205,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 42,
+      "sequence": 51,
       "user_index_after": 8,
       "user_index_before": 7
      },
@@ -179,7 +215,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 43,
+      "sequence": 52,
       "user_index_after": 9,
       "user_index_before": 8
      },
@@ -189,7 +225,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 44,
+      "sequence": 53,
       "user_index_after": 10,
       "user_index_before": 9
      },
@@ -199,7 +235,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 45,
+      "sequence": 54,
       "user_index_after": 11,
       "user_index_before": 10
      },
@@ -209,7 +245,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 46,
+      "sequence": 55,
       "user_index_after": 12,
       "user_index_before": 11
      },
@@ -219,7 +255,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 47,
+      "sequence": 56,
       "user_index_after": 13,
       "user_index_before": 12
      },
@@ -229,7 +265,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 48,
+      "sequence": 57,
       "user_index_after": 14,
       "user_index_before": 13
      },
@@ -239,7 +275,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 49,
+      "sequence": 58,
       "user_index_after": 15,
       "user_index_before": 14
      },
@@ -249,7 +285,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 50,
+      "sequence": 59,
       "user_index_after": 16,
       "user_index_before": 15
      },
@@ -259,7 +295,7 @@
       ],
       "edits": 1,
       "label": "Place team_start",
-      "sequence": 51,
+      "sequence": 60,
       "user_index_after": 17,
       "user_index_before": 16
      },
@@ -269,7 +305,7 @@
       ],
       "edits": 1,
       "label": "Place team_start",
-      "sequence": 52,
+      "sequence": 61,
       "user_index_after": 18,
       "user_index_before": 17
      },
@@ -279,7 +315,7 @@
       ],
       "edits": 1,
       "label": "Place team_start",
-      "sequence": 53,
+      "sequence": 62,
       "user_index_after": 19,
       "user_index_before": 18
      },
@@ -289,7 +325,7 @@
       ],
       "edits": 1,
       "label": "Place team_start",
-      "sequence": 54,
+      "sequence": 63,
       "user_index_after": 20,
       "user_index_before": 19
      },
@@ -299,7 +335,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 55,
+      "sequence": 64,
       "user_index_after": 21,
       "user_index_before": 20
      },
@@ -309,7 +345,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 56,
+      "sequence": 65,
       "user_index_after": 22,
       "user_index_before": 21
      },
@@ -319,7 +355,7 @@
       ],
       "edits": 1,
       "label": "Place pickup",
-      "sequence": 57,
+      "sequence": 66,
       "user_index_after": 23,
       "user_index_before": 22
      }
@@ -985,7 +1021,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 58,
+      "sequence": 67,
       "user_index_after": 1,
       "user_index_before": 0
      },
@@ -995,7 +1031,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 59,
+      "sequence": 68,
       "user_index_after": 2,
       "user_index_before": 1
      },
@@ -1005,7 +1041,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 60,
+      "sequence": 69,
       "user_index_after": 3,
       "user_index_before": 2
      },
@@ -1015,7 +1051,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 61,
+      "sequence": 70,
       "user_index_after": 4,
       "user_index_before": 3
      },
@@ -1025,7 +1061,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 62,
+      "sequence": 71,
       "user_index_after": 5,
       "user_index_before": 4
      },
@@ -1035,7 +1071,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 63,
+      "sequence": 72,
       "user_index_after": 6,
       "user_index_before": 5
      },
@@ -1045,7 +1081,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 64,
+      "sequence": 73,
       "user_index_after": 7,
       "user_index_before": 6
      },
@@ -1055,7 +1091,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 65,
+      "sequence": 74,
       "user_index_after": 8,
       "user_index_before": 7
      },
@@ -1065,7 +1101,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 66,
+      "sequence": 75,
       "user_index_after": 9,
       "user_index_before": 8
      },
@@ -1075,7 +1111,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 67,
+      "sequence": 76,
       "user_index_after": 10,
       "user_index_before": 9
      },
@@ -1085,7 +1121,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 68,
+      "sequence": 77,
       "user_index_after": 11,
       "user_index_before": 10
      },
@@ -1095,7 +1131,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 69,
+      "sequence": 78,
       "user_index_after": 12,
       "user_index_before": 11
      },
@@ -1105,7 +1141,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 70,
+      "sequence": 79,
       "user_index_after": 13,
       "user_index_before": 12
      },
@@ -1115,7 +1151,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 71,
+      "sequence": 80,
       "user_index_after": 14,
       "user_index_before": 13
      },
@@ -1125,7 +1161,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 72,
+      "sequence": 81,
       "user_index_after": 15,
       "user_index_before": 14
      },
@@ -1135,7 +1171,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 73,
+      "sequence": 82,
       "user_index_after": 16,
       "user_index_before": 15
      },
@@ -1145,7 +1181,7 @@
       ],
       "edits": 1,
       "label": "Place player_spawn",
-      "sequence": 74,
+      "sequence": 83,
       "user_index_after": 17,
       "user_index_before": 16
      },
@@ -1155,7 +1191,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 75,
+      "sequence": 84,
       "user_index_after": 18,
       "user_index_before": 17
      },
@@ -1165,7 +1201,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 76,
+      "sequence": 85,
       "user_index_after": 19,
       "user_index_before": 18
      },
@@ -1175,7 +1211,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 77,
+      "sequence": 86,
       "user_index_after": 20,
       "user_index_before": 19
      },
@@ -1185,7 +1221,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 78,
+      "sequence": 87,
       "user_index_after": 21,
       "user_index_before": 20
      },
@@ -1195,7 +1231,7 @@
       ],
       "edits": 1,
       "label": "Place model",
-      "sequence": 79,
+      "sequence": 88,
       "user_index_after": 22,
       "user_index_before": 21
      }
@@ -2034,6 +2070,96 @@
       "sequence": 34,
       "user_index_after": 31,
       "user_index_before": 31
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:30"
+      ],
+      "edits": 1,
+      "label": "Set link_0",
+      "sequence": 35,
+      "user_index_after": 31,
+      "user_index_before": 31
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:31"
+      ],
+      "edits": 1,
+      "label": "Place trigger_volume",
+      "sequence": 36,
+      "user_index_after": 32,
+      "user_index_before": 31
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:32"
+      ],
+      "edits": 1,
+      "label": "Place capture_zone",
+      "sequence": 37,
+      "user_index_after": 33,
+      "user_index_before": 32
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:33"
+      ],
+      "edits": 1,
+      "label": "Place destructible_target",
+      "sequence": 38,
+      "user_index_after": 34,
+      "user_index_before": 33
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:34"
+      ],
+      "edits": 1,
+      "label": "Place bot_slot",
+      "sequence": 39,
+      "user_index_after": 35,
+      "user_index_before": 34
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:35"
+      ],
+      "edits": 1,
+      "label": "Place bot_slot",
+      "sequence": 40,
+      "user_index_after": 36,
+      "user_index_before": 35
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:36"
+      ],
+      "edits": 1,
+      "label": "Place item_pickup",
+      "sequence": 41,
+      "user_index_after": 37,
+      "user_index_before": 36
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:37"
+      ],
+      "edits": 1,
+      "label": "Place item_pickup",
+      "sequence": 42,
+      "user_index_after": 38,
+      "user_index_before": 37
+     },
+     {
+      "affected": [
+       "user:ee5f652bd56d:38"
+      ],
+      "edits": 1,
+      "label": "Place item_pickup",
+      "sequence": 43,
+      "user_index_after": 39,
+      "user_index_before": 38
      }
     ]
    },
@@ -3018,9 +3144,1030 @@
       "op": "set_field",
       "target": "user:ee5f652bd56d:29",
       "value": "user:ee5f652bd56d:28"
+     },
+     {
+      "field": "link_0",
+      "op": "set_field",
+      "target": "user:ee5f652bd56d:30",
+      "value": "user:ee5f652bd56d:29"
+     },
+     {
+      "marker": {
+       "category": "trigger_volume",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:4db8bf4bb73fb8b5db76d4ea",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "half_x": {
+         "evidence": "proven",
+         "meaning": "Studio format: box half-width across (world units)",
+         "offset": null,
+         "range": [
+          10,
+          8000
+         ],
+         "type": "u16",
+         "value": 150
+        },
+        "half_z": {
+         "evidence": "proven",
+         "meaning": "Studio format: box half-depth (world units)",
+         "offset": null,
+         "range": [
+          10,
+          8000
+         ],
+         "type": "u16",
+         "value": 150
+        },
+        "height": {
+         "evidence": "proven",
+         "meaning": "Studio format: height above its base (world units)",
+         "offset": null,
+         "range": [
+          10,
+          16000
+         ],
+         "type": "u16",
+         "value": 400
+        },
+        "label": {
+         "evidence": "proven",
+         "max_length": 48,
+         "meaning": "Studio format: name shown in the editor and scenario graph",
+         "offset": null,
+         "type": "text",
+         "value": "Gate"
+        },
+        "radius": {
+         "evidence": "proven",
+         "meaning": "Studio format: circle radius (world units)",
+         "offset": null,
+         "range": [
+          10,
+          8000
+         ],
+         "type": "u16",
+         "value": 160
+        },
+        "shape": {
+         "enum": {
+          "0": "circle",
+          "1": "box"
+         },
+         "enum_closed": true,
+         "evidence": "proven",
+         "meaning": "Studio format: volume shape",
+         "offset": null,
+         "range": [
+          0,
+          255
+         ],
+         "type": "u8",
+         "value": 0
+        }
+       },
+       "id": "user:ee5f652bd56d:31",
+       "models": [
+        "studio:model:4db8bf4bb73fb8b5db76d4ea"
+       ],
+       "platform": "studio",
+       "restrictions": {},
+       "source": {
+        "template": "studio:template:trigger_volume",
+        "user_created": true
+       },
+       "source_kind": "studio_trigger_volume",
+       "translation": [
+        0.0,
+        0.0,
+        200.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_marker"
+     },
+     {
+      "marker": {
+       "category": "capture_zone",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:067593197ba89f09fd47b873",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "label": {
+         "evidence": "proven",
+         "max_length": 48,
+         "meaning": "Studio format: name shown in the editor and scenario graph",
+         "offset": null,
+         "type": "text",
+         "value": "East hill"
+        },
+        "owner": {
+         "evidence": "proven",
+         "meaning": "Studio format: team owning it at the start",
+         "offset": null,
+         "range": [
+          0,
+          7
+         ],
+         "sentinel": {
+          "255": "neutral"
+         },
+         "type": "u8",
+         "value": 255
+        },
+        "radius": {
+         "evidence": "proven",
+         "meaning": "Studio format: zone radius (world units)",
+         "offset": null,
+         "range": [
+          20,
+          8000
+         ],
+         "type": "u16",
+         "value": 220
+        },
+        "zone_mode": {
+         "enum": {
+          "0": "capture",
+          "1": "defend",
+          "2": "king of the hill"
+         },
+         "enum_closed": true,
+         "evidence": "proven",
+         "meaning": "Studio format: what the zone is for",
+         "offset": null,
+         "range": [
+          0,
+          255
+         ],
+         "type": "u8",
+         "value": 0
+        }
+       },
+       "id": "user:ee5f652bd56d:32",
+       "models": [
+        "studio:model:067593197ba89f09fd47b873"
+       ],
+       "platform": "studio",
+       "restrictions": {},
+       "source": {
+        "template": "studio:template:capture_zone",
+        "user_created": true
+       },
+       "source_kind": "studio_capture_zone",
+       "translation": [
+        500.0,
+        0.0,
+        0.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_marker"
+     },
+     {
+      "marker": {
+       "category": "destructible_target",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:b1d329facce40c0e624f6a26",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "destroyed_model": {
+         "evidence": "proven",
+         "max_length": 96,
+         "meaning": "Studio format: content ID of the wreck (empty: nothing remains)",
+         "offset": null,
+         "type": "text",
+         "value": ""
+        },
+        "health": {
+         "evidence": "proven",
+         "meaning": "Studio format: hit points",
+         "offset": null,
+         "range": [
+          1,
+          60000
+         ],
+         "type": "u16",
+         "value": 800
+        },
+        "label": {
+         "evidence": "proven",
+         "max_length": 48,
+         "meaning": "Studio format: name shown in the editor and scenario graph",
+         "offset": null,
+         "type": "text",
+         "value": "Fuel depot"
+        },
+        "model": {
+         "evidence": "proven",
+         "max_length": 96,
+         "meaning": "Studio format: content ID of the intact model (empty: the editor marker)",
+         "offset": null,
+         "type": "text",
+         "value": ""
+        },
+        "owner": {
+         "evidence": "proven",
+         "meaning": "Studio format: team it belongs to",
+         "offset": null,
+         "range": [
+          0,
+          7
+         ],
+         "sentinel": {
+          "255": "nobody"
+         },
+         "type": "u8",
+         "value": 255
+        },
+        "respawn_seconds": {
+         "evidence": "proven",
+         "meaning": "Studio format: seconds until it is rebuilt (0 = never)",
+         "offset": null,
+         "range": [
+          0,
+          3600
+         ],
+         "type": "u16",
+         "value": 0
+        },
+        "score": {
+         "evidence": "proven",
+         "meaning": "Studio format: points for destroying it",
+         "offset": null,
+         "range": [
+          0,
+          60000
+         ],
+         "type": "u16",
+         "value": 250
+        }
+       },
+       "id": "user:ee5f652bd56d:33",
+       "models": [
+        "studio:model:b1d329facce40c0e624f6a26"
+       ],
+       "platform": "studio",
+       "restrictions": {},
+       "source": {
+        "template": "studio:template:destructible_target",
+        "user_created": true
+       },
+       "source_kind": "studio_destructible_target",
+       "translation": [
+        0.0,
+        0.0,
+        -480.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_marker"
+     },
+     {
+      "marker": {
+       "category": "bot_slot",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:abbe8b4fc9e186d61b81a6ef",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "aggression": {
+         "evidence": "proven",
+         "meaning": "Studio format: aggression (0 cautious - 100 reckless)",
+         "offset": null,
+         "range": [
+          0,
+          100
+         ],
+         "type": "u8",
+         "value": 50
+        },
+        "ai_slot": {
+         "evidence": "proven",
+         "meaning": "Studio format: AI slot the bot claims",
+         "offset": null,
+         "range": [
+          0,
+          63
+         ],
+         "type": "u8",
+         "value": 0
+        },
+        "allowed_weapons": {
+         "bitmask_bits": 6,
+         "evidence": "proven",
+         "meaning": "Studio format: weapons it may use (cannon, machine gun, rockets, guided missiles, mines, special)",
+         "offset": null,
+         "range": [
+          1,
+          63
+         ],
+         "type": "u8",
+         "value": 63
+        },
+        "capture_behavior": {
+         "enum": {
+          "0": "ignore zones",
+          "1": "capture and hold",
+          "2": "contest only"
+         },
+         "enum_closed": true,
+         "evidence": "proven",
+         "meaning": "Studio format: what it does with zones",
+         "offset": null,
+         "range": [
+          0,
+          255
+         ],
+         "type": "u8",
+         "value": 0
+        },
+        "capture_target": {
+         "evidence": "proven",
+         "meaning": "Studio format: zone it captures",
+         "offset": null,
+         "type": "ref",
+         "value": null
+        },
+        "escort_target": {
+         "evidence": "proven",
+         "meaning": "Studio format: bot or object it escorts or supports",
+         "offset": null,
+         "type": "ref",
+         "value": null
+        },
+        "guard_target": {
+         "evidence": "proven",
+         "meaning": "Studio format: what it defends",
+         "offset": null,
+         "type": "ref",
+         "value": null
+        },
+        "kind": {
+         "enum": {
+          "0": "tank",
+          "1": "Queenlord"
+         },
+         "enum_closed": true,
+         "evidence": "proven",
+         "meaning": "Studio format: what it is",
+         "offset": null,
+         "range": [
+          0,
+          255
+         ],
+         "type": "u8",
+         "value": 0
+        },
+        "model": {
+         "evidence": "proven",
+         "max_length": 96,
+         "meaning": "Studio format: content ID of the model it is drawn with",
+         "offset": null,
+         "type": "text",
+         "value": "studio:model:abbe8b4fc9e186d61b81a6ef"
+        },
+        "patrol_start": {
+         "evidence": "proven",
+         "meaning": "Studio format: navigation point its patrol starts from",
+         "offset": null,
+         "type": "ref",
+         "value": null
+        },
+        "respawn": {
+         "enum": {
+          "0": "never",
+          "1": "after a delay",
+          "2": "with its wave"
+         },
+         "enum_closed": true,
+         "evidence": "proven",
+         "meaning": "Studio format: respawn",
+         "offset": null,
+         "range": [
+          0,
+          255
+         ],
+         "type": "u8",
+         "value": 0
+        },
+        "respawn_seconds": {
+         "evidence": "proven",
+         "meaning": "Studio format: seconds before it respawns",
+         "offset": null,
+         "range": [
+          0,
+          3600
+         ],
+         "type": "u16",
+         "value": 20
+        },
+        "role": {
+         "enum": {
+          "0": "attack",
+          "1": "defend",
+          "2": "patrol",
+          "3": "capture",
+          "4": "escort",
+          "5": "support",
+          "6": "boss"
+         },
+         "enum_closed": true,
+         "evidence": "proven",
+         "meaning": "Studio format: behaviour",
+         "offset": null,
+         "range": [
+          0,
+          255
+         ],
+         "type": "u8",
+         "value": 5
+        },
+        "spawn_delay_seconds": {
+         "evidence": "proven",
+         "meaning": "Studio format: seconds after the start before it appears",
+         "offset": null,
+         "range": [
+          0,
+          3600
+         ],
+         "type": "u16",
+         "value": 0
+        },
+        "team": {
+         "evidence": "proven",
+         "meaning": "Studio format: team",
+         "offset": null,
+         "range": [
+          0,
+          7
+         ],
+         "type": "u8",
+         "value": 0
+        }
+       },
+       "id": "user:ee5f652bd56d:34",
+       "models": [
+        "studio:model:abbe8b4fc9e186d61b81a6ef"
+       ],
+       "platform": "studio",
+       "restrictions": {},
+       "source": {
+        "template": "studio:template:bot",
+        "user_created": true
+       },
+       "source_kind": "studio_bot",
+       "translation": [
+        -150.0,
+        0.0,
+        700.0
+       ],
+       "yaw": 32768
+      },
+      "op": "add_marker"
+     },
+     {
+      "marker": {
+       "category": "bot_slot",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:abbe8b4fc9e186d61b81a6ef",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "aggression": {
+         "evidence": "proven",
+         "meaning": "Studio format: aggression (0 cautious - 100 reckless)",
+         "offset": null,
+         "range": [
+          0,
+          100
+         ],
+         "type": "u8",
+         "value": 70
+        },
+        "ai_slot": {
+         "evidence": "proven",
+         "meaning": "Studio format: AI slot the bot claims",
+         "offset": null,
+         "range": [
+          0,
+          63
+         ],
+         "type": "u8",
+         "value": 1
+        },
+        "allowed_weapons": {
+         "bitmask_bits": 6,
+         "evidence": "proven",
+         "meaning": "Studio format: weapons it may use (cannon, machine gun, rockets, guided missiles, mines, special)",
+         "offset": null,
+         "range": [
+          1,
+          63
+         ],
+         "type": "u8",
+         "value": 63
+        },
+        "capture_behavior": {
+         "enum": {
+          "0": "ignore zones",
+          "1": "capture and hold",
+          "2": "contest only"
+         },
+         "enum_closed": true,
+         "evidence": "proven",
+         "meaning": "Studio format: what it does with zones",
+         "offset": null,
+         "range": [
+          0,
+          255
+         ],
+         "type": "u8",
+         "value": 0
+        },
+        "capture_target": {
+         "evidence": "proven",
+         "meaning": "Studio format: zone it captures",
+         "offset": null,
+         "type": "ref",
+         "value": null
+        },
+        "escort_target": {
+         "evidence": "proven",
+         "meaning": "Studio format: bot or object it escorts or supports",
+         "offset": null,
+         "type": "ref",
+         "value": null
+        },
+        "guard_target": {
+         "evidence": "proven",
+         "meaning": "Studio format: what it defends",
+         "offset": null,
+         "type": "ref",
+         "value": null
+        },
+        "kind": {
+         "enum": {
+          "0": "tank",
+          "1": "Queenlord"
+         },
+         "enum_closed": true,
+         "evidence": "proven",
+         "meaning": "Studio format: what it is",
+         "offset": null,
+         "range": [
+          0,
+          255
+         ],
+         "type": "u8",
+         "value": 0
+        },
+        "model": {
+         "evidence": "proven",
+         "max_length": 96,
+         "meaning": "Studio format: content ID of the model it is drawn with",
+         "offset": null,
+         "type": "text",
+         "value": "studio:model:abbe8b4fc9e186d61b81a6ef"
+        },
+        "patrol_start": {
+         "evidence": "proven",
+         "meaning": "Studio format: navigation point its patrol starts from",
+         "offset": null,
+         "type": "ref",
+         "value": "user:ee5f652bd56d:30"
+        },
+        "respawn": {
+         "enum": {
+          "0": "never",
+          "1": "after a delay",
+          "2": "with its wave"
+         },
+         "enum_closed": true,
+         "evidence": "proven",
+         "meaning": "Studio format: respawn",
+         "offset": null,
+         "range": [
+          0,
+          255
+         ],
+         "type": "u8",
+         "value": 0
+        },
+        "respawn_seconds": {
+         "evidence": "proven",
+         "meaning": "Studio format: seconds before it respawns",
+         "offset": null,
+         "range": [
+          0,
+          3600
+         ],
+         "type": "u16",
+         "value": 20
+        },
+        "role": {
+         "enum": {
+          "0": "attack",
+          "1": "defend",
+          "2": "patrol",
+          "3": "capture",
+          "4": "escort",
+          "5": "support",
+          "6": "boss"
+         },
+         "enum_closed": true,
+         "evidence": "proven",
+         "meaning": "Studio format: behaviour",
+         "offset": null,
+         "range": [
+          0,
+          255
+         ],
+         "type": "u8",
+         "value": 2
+        },
+        "spawn_delay_seconds": {
+         "evidence": "proven",
+         "meaning": "Studio format: seconds after the start before it appears",
+         "offset": null,
+         "range": [
+          0,
+          3600
+         ],
+         "type": "u16",
+         "value": 0
+        },
+        "team": {
+         "evidence": "proven",
+         "meaning": "Studio format: team",
+         "offset": null,
+         "range": [
+          0,
+          7
+         ],
+         "type": "u8",
+         "value": 1
+        }
+       },
+       "id": "user:ee5f652bd56d:35",
+       "models": [
+        "studio:model:abbe8b4fc9e186d61b81a6ef"
+       ],
+       "platform": "studio",
+       "restrictions": {},
+       "source": {
+        "template": "studio:template:bot",
+        "user_created": true
+       },
+       "source_kind": "studio_bot",
+       "translation": [
+        0.0,
+        0.0,
+        -600.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_marker"
+     },
+     {
+      "marker": {
+       "category": "item_pickup",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:f9d24e7016dd1cc39aae36fb",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "item": {
+         "evidence": "proven",
+         "max_length": 48,
+         "meaning": "Studio format: item definition this pickup gives",
+         "offset": null,
+         "type": "text",
+         "value": "repair_kit"
+        },
+        "quantity": {
+         "evidence": "proven",
+         "meaning": "Studio format: how many it gives each time",
+         "offset": null,
+         "range": [
+          1,
+          99
+         ],
+         "type": "u8",
+         "value": 1
+        },
+        "respawn_seconds": {
+         "evidence": "proven",
+         "meaning": "Studio format: seconds until it comes back (0 = never)",
+         "offset": null,
+         "range": [
+          0,
+          3600
+         ],
+         "type": "u16",
+         "value": 45
+        },
+        "team": {
+         "evidence": "proven",
+         "meaning": "Studio format: team allowed to pick it up",
+         "offset": null,
+         "range": [
+          0,
+          7
+         ],
+         "sentinel": {
+          "255": "any team"
+         },
+         "type": "u8",
+         "value": 255
+        },
+        "uses": {
+         "evidence": "proven",
+         "meaning": "Studio format: times it can be picked up",
+         "offset": null,
+         "range": [
+          1,
+          999
+         ],
+         "sentinel": {
+          "0": "unlimited"
+         },
+         "type": "u16",
+         "value": 0
+        }
+       },
+       "id": "user:ee5f652bd56d:36",
+       "models": [
+        "studio:model:f9d24e7016dd1cc39aae36fb"
+       ],
+       "platform": "studio",
+       "restrictions": {},
+       "source": {
+        "template": "studio:template:item_pickup",
+        "user_created": true
+       },
+       "source_kind": "studio_item_pickup",
+       "translation": [
+        -400.0,
+        0.0,
+        600.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_marker"
+     },
+     {
+      "marker": {
+       "category": "item_pickup",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:f9d24e7016dd1cc39aae36fb",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "item": {
+         "evidence": "proven",
+         "max_length": 48,
+         "meaning": "Studio format: item definition this pickup gives",
+         "offset": null,
+         "type": "text",
+         "value": "repair_kit"
+        },
+        "quantity": {
+         "evidence": "proven",
+         "meaning": "Studio format: how many it gives each time",
+         "offset": null,
+         "range": [
+          1,
+          99
+         ],
+         "type": "u8",
+         "value": 1
+        },
+        "respawn_seconds": {
+         "evidence": "proven",
+         "meaning": "Studio format: seconds until it comes back (0 = never)",
+         "offset": null,
+         "range": [
+          0,
+          3600
+         ],
+         "type": "u16",
+         "value": 45
+        },
+        "team": {
+         "evidence": "proven",
+         "meaning": "Studio format: team allowed to pick it up",
+         "offset": null,
+         "range": [
+          0,
+          7
+         ],
+         "sentinel": {
+          "255": "any team"
+         },
+         "type": "u8",
+         "value": 255
+        },
+        "uses": {
+         "evidence": "proven",
+         "meaning": "Studio format: times it can be picked up",
+         "offset": null,
+         "range": [
+          1,
+          999
+         ],
+         "sentinel": {
+          "0": "unlimited"
+         },
+         "type": "u16",
+         "value": 0
+        }
+       },
+       "id": "user:ee5f652bd56d:37",
+       "models": [
+        "studio:model:f9d24e7016dd1cc39aae36fb"
+       ],
+       "platform": "studio",
+       "restrictions": {},
+       "source": {
+        "template": "studio:template:item_pickup",
+        "user_created": true
+       },
+       "source_kind": "studio_item_pickup",
+       "translation": [
+        400.0,
+        0.0,
+        600.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_marker"
+     },
+     {
+      "marker": {
+       "category": "item_pickup",
+       "conditions": [],
+       "confidence": "proven",
+       "dependencies": [
+        {
+         "field": "display_model",
+         "id": "studio:model:f9d24e7016dd1cc39aae36fb",
+         "kind": "model",
+         "status": "resolved"
+        }
+       ],
+       "evidence": [
+        "Studio-defined record"
+       ],
+       "fields": {
+        "item": {
+         "evidence": "proven",
+         "max_length": 48,
+         "meaning": "Studio format: item definition this pickup gives",
+         "offset": null,
+         "type": "text",
+         "value": "speed_boost"
+        },
+        "quantity": {
+         "evidence": "proven",
+         "meaning": "Studio format: how many it gives each time",
+         "offset": null,
+         "range": [
+          1,
+          99
+         ],
+         "type": "u8",
+         "value": 1
+        },
+        "respawn_seconds": {
+         "evidence": "proven",
+         "meaning": "Studio format: seconds until it comes back (0 = never)",
+         "offset": null,
+         "range": [
+          0,
+          3600
+         ],
+         "type": "u16",
+         "value": 30
+        },
+        "team": {
+         "evidence": "proven",
+         "meaning": "Studio format: team allowed to pick it up",
+         "offset": null,
+         "range": [
+          0,
+          7
+         ],
+         "sentinel": {
+          "255": "any team"
+         },
+         "type": "u8",
+         "value": 255
+        },
+        "uses": {
+         "evidence": "proven",
+         "meaning": "Studio format: times it can be picked up",
+         "offset": null,
+         "range": [
+          1,
+          999
+         ],
+         "sentinel": {
+          "0": "unlimited"
+         },
+         "type": "u16",
+         "value": 0
+        }
+       },
+       "id": "user:ee5f652bd56d:38",
+       "models": [
+        "studio:model:f9d24e7016dd1cc39aae36fb"
+       ],
+       "platform": "studio",
+       "restrictions": {},
+       "source": {
+        "template": "studio:template:item_pickup",
+        "user_created": true
+       },
+       "source_kind": "studio_item_pickup",
+       "translation": [
+        0.0,
+        0.0,
+        450.0
+       ],
+       "yaw": 0
+      },
+      "op": "add_marker"
      }
     ],
-    "next_user_index": 31,
+    "next_user_index": 39,
     "platform": "studio",
     "scene": "studio:scene:map_training_grounds",
     "schema": "btga-overlay",
@@ -3051,6 +4198,7 @@
    "objectives": [
     "user:ee5f652bd56d:24"
    ],
+   "scenario": "first_strike",
    "title": "First strike"
   }
  },
@@ -3073,8 +4221,198 @@
   },
   "title": "Starter example"
  },
+ "scenarios": {
+  "first_strike": {
+   "counters": {
+    "cnt1": {
+     "initial": 0,
+     "max": 100,
+     "min": 0,
+     "title": "Tanks destroyed",
+     "visible": true
+    }
+   },
+   "end": {
+    "failure": {
+     "message": "Mission failed",
+     "transition": "retry"
+    },
+    "victory": {
+     "message": "Mission complete",
+     "next": null,
+     "transition": "results"
+    }
+   },
+   "failure": [
+    {
+     "when": "player_destroyed"
+    }
+   ],
+   "groups": {
+    "grp1": {
+     "active_at_start": true,
+     "members": [
+      "user:ee5f652bd56d:34"
+     ],
+     "title": "Escort"
+    }
+   },
+   "layout": {},
+   "map": "training_grounds",
+   "objectives": {
+    "obj1": {
+     "hidden": false,
+     "kind": "reach",
+     "on_complete": [],
+     "on_fail": [],
+     "optional": false,
+     "params": {
+      "area": "user:ee5f652bd56d:31"
+     },
+     "repeat": 1,
+     "requires": [],
+     "title": "Drive through the gate"
+    },
+    "obj2": {
+     "hidden": false,
+     "kind": "capture",
+     "on_complete": [],
+     "on_fail": [],
+     "optional": false,
+     "params": {
+      "hold_seconds": 15,
+      "team": 0,
+      "zone": "user:ee5f652bd56d:32"
+     },
+     "repeat": 1,
+     "requires": [
+      "obj1"
+     ],
+     "title": "Take the east hill"
+    },
+    "obj3": {
+     "hidden": false,
+     "kind": "destroy",
+     "on_complete": [
+      {
+       "audience": "everyone",
+       "do": "message",
+       "seconds": 4,
+       "text": "Depot destroyed!"
+      }
+     ],
+     "on_fail": [],
+     "optional": false,
+     "params": {
+      "count": 0,
+      "targets": [
+       "user:ee5f652bd56d:33"
+      ]
+     },
+     "repeat": 1,
+     "requires": [
+      "obj2"
+     ],
+     "title": "Destroy the fuel depot"
+    },
+    "obj4": {
+     "hidden": false,
+     "kind": "marker_objective",
+     "on_complete": [],
+     "on_fail": [],
+     "optional": true,
+     "params": {
+      "marker": "user:ee5f652bd56d:24"
+     },
+     "repeat": 1,
+     "requires": [],
+     "title": "Bonus: the depot marker"
+    }
+   },
+   "rules": {
+    "friendly_fire": false,
+    "lives": 3,
+    "mode": "mission",
+    "score": {
+     "kill": 100,
+     "multipliers": [],
+     "objective": 500
+    },
+    "score_limit": 0,
+    "teams": 2,
+    "time_limit_seconds": 0
+   },
+   "schema": "btga-scenario",
+   "start": {
+    "actions": [],
+    "briefing": "Drive through the gate, take the east hill, then destroy the fuel depot.",
+    "player_spawn": "user:ee5f652bd56d:22",
+    "transition": "briefing"
+   },
+   "timers": {
+    "tmr1": {
+     "on_expire": [
+      {
+       "do": "spawn_wave",
+       "wave": "wav1"
+      },
+      {
+       "amount": 0,
+       "counter": "cnt1",
+       "do": "counter_add"
+      }
+     ],
+     "repeat": false,
+     "seconds": 90,
+     "starts": "by_action",
+     "title": "Reinforcements",
+     "visible": true
+    }
+   },
+   "title": "First strike",
+   "triggers": {
+    "trg1": {
+     "actions": [
+      {
+       "audience": "player",
+       "do": "message",
+       "seconds": 5,
+       "text": "The east hill is guarded. Take it!"
+      },
+      {
+       "do": "start_timer",
+       "timer": "tmr1"
+      }
+     ],
+     "enabled": true,
+     "on": "enter",
+     "once": true,
+     "subject": "player",
+     "title": "At the gate",
+     "volume": "user:ee5f652bd56d:31"
+    }
+   },
+   "version": 1,
+   "victory": [
+    {
+     "when": "all_required_objectives"
+    }
+   ],
+   "waves": {
+    "wav1": {
+     "bots": [],
+     "count": 3,
+     "delay_seconds": 0,
+     "interval_seconds": 5,
+     "repeat": 1,
+     "spawner": "user:ee5f652bd56d:25",
+     "title": "Counter-attack"
+    }
+   }
+  }
+ },
  "schema": "btga-studio-project",
- "schema_version": 2,
+ "schema_version": 3,
  "tanks": {
   "heavy": {
    "model": "studio:model:abbe8b4fc9e186d61b81a6ef",

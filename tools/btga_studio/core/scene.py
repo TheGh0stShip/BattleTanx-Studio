@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from tools.btga_assets import mesh as meshmod
 from tools.btga_assets import overlay as overlay_module
 from tools.btga_assets.gltf import PLANAR_DISPLAY_HEIGHT
 from tools.btga_assets.studio import StudioError
@@ -47,6 +48,7 @@ class MeshData:
 
     def __init__(self, model_id: str, mesh: dict):
         self.model_id = model_id
+        mesh = meshmod.with_game_lighting(mesh)
         triangles = mesh["triangles"]
         if mesh.get("lods"):
             lod0 = [entry for entry in mesh["lods"] if entry["index"] == 0]

@@ -128,7 +128,7 @@ class ProjectFormatTests(unittest.TestCase):
         migrated = p.loads_project(json.dumps(v1))
         self.assertEqual(list(migrated.maps), ["main"])
         self.assertEqual(migrated.maps["main"].source_fingerprint, "ab" * 32)
-        self.assertEqual(json.loads(p.dumps(migrated))["schema_version"], 2)
+        self.assertEqual(json.loads(p.dumps(migrated))["schema_version"], 3)
         with self.assertRaises(p.FutureVersion):
             p.loads_project(json.dumps({"schema": "btga-studio-project", "schema_version": 99}))
         with self.assertRaises(p.ProjectError):
@@ -258,7 +258,7 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(first, second)
         package = read_package(first)
         self.assertEqual(sorted(package.maps), ["arena", "target_range", "training_grounds"])
-        self.assertEqual(package.manifest["schema_versions"]["project"], 2)
+        self.assertEqual(package.manifest["schema_versions"]["project"], 3)
         self.assertEqual(package.manifest["sources"], [])
         self.assertTrue(package.models)
         self.assertTrue(all(model_id.startswith("studio:") for model_id in package.models))

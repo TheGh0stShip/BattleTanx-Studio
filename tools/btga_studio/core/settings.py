@@ -118,6 +118,10 @@ class Preferences:
     bindings: dict = field(default_factory=dict)  # action -> key overrides (gui.input.DEFAULT_BINDINGS)
     look_sensitivity: float = 0.0035
     invert_look_y: bool = False
+    # Test in Game: kept on this computer only, never written into projects or packages.
+    runtime_executable: str | None = None
+    runtime_rom: str | None = None
+    runtime_capture: str = "none"
 
     def add_recent(self, path: str) -> None:
         self.recent_projects = [path] + [p for p in self.recent_projects if p != path]

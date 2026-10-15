@@ -13,6 +13,10 @@ Highlights
 - Welcome screen, Project Hub, guided tour and built-in help.
 - Gameplay editor for maps, spawns, pickups, objectives, navigation, missions, campaigns,
   multiplayer, minigames, tanks, gangs, minimaps and prefabs, all with undo and redo.
+- Scenario graphs, triggers, timers, waves, custom item effects, bot roles and patrols.
+- Drive Preview for editor-scale, collision, water and navigation checks. It is clearly
+  labelled as an approximation and does not simulate the game's physics or combat.
+- Test in Game readiness checks and a versioned launch contract for a compatible PC runtime.
 - Source Manager for adding your own copies of BattleTanx games.
 - Project and file names in Greek, Cyrillic, Chinese, Japanese and Korean display correctly.
 

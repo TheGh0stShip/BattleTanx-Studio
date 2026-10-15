@@ -44,6 +44,7 @@ class PlacementMode:
     id: str  # model id or template marker id
     template: dict | None = None
     yaw: int = 0
+    values: dict | None = None  # field values a placed marker starts with (for example the item a pickup gives)
 
 
 class EditorController:
@@ -435,7 +436,7 @@ class EditorController:
             return entry[1]
         return self.index.templates.get(template_id) if self.index else None
 
-    def begin_placement(self, kind: str, resource_id: str) -> None:
+    def begin_placement(self, kind: str, resource_id: str, values: dict | None = None) -> None:
         if self.document is None:
             raise EditError("open a map first")
         template = None
@@ -448,7 +449,7 @@ class EditorController:
                 raise EditError(f"cannot place this record: {reason}")
         elif resource_id not in self.library._models:
             raise EditError("model not in any loaded catalog")
-        self.placement = PlacementMode(kind, resource_id, template)
+        self.placement = PlacementMode(kind, resource_id, template, 0, dict(values or {}))
 
     def cancel(self) -> None:
         if self.document and self.document.transforming:
@@ -503,7 +504,15 @@ class EditorController:
             if self.placement.kind == "model":
                 new_id = self.document.place_model(self.placement.id, point, yaw)
             else:
-                new_id = self.document.place_marker(self.placement.template, point, yaw)
+                values = dict(self.placement.values or {})
+                if self.placement.template.get("category") == "bot_slot" and "ai_slot" not in values:
+                    from .bots import next_free_slot
+
+                    free = next_free_slot(self.document.scene)
+                    if free is None:
+                        raise EditError("every AI slot on this map is taken; remove a bot first")
+                    values["ai_slot"] = free
+                new_id = self.document.place_marker(self.placement.template, point, yaw, values=values)
         except EditError as error:
             self.log("error", f"placement refused: {error}")
             return None
@@ -688,6 +697,22 @@ class EditorController:
         elif name == "save" and self.project_path:
             self.save()
 
+    # -- Test in Game ------------------------------------------------------------------------
+    last_export = None  # runtime.ExportRecord of the package written in this session
+
+    def runtime_capabilities(self) -> dict | None:
+        """The configured PC runtime's declared capabilities, or None when none is configured or it is not compatible."""
+
+        from . import runtime as runtime_module
+
+        try:
+            return runtime_module.read_capabilities(self.preferences.runtime_executable)
+        except runtime_module.RuntimeProblem:
+            return None
+
+    def open_documents(self) -> dict:
+        return {key: entry.document for key, entry in (self.project.maps.items() if self.project else []) if entry.document is not None}
+
     # -- diagnostics -------------------------------------------------------------------------
     def request_diagnostics(self, immediate: bool = False) -> None:
         self._diag_due = time.monotonic() + (0.0 if immediate else 0.4)
@@ -717,7 +742,13 @@ class EditorController:
     def project_diagnostics(self) -> list[diag.Diagnostic]:
         if self.project is None:
             return []
-        return [diag.Diagnostic("error", p["code"], p["message"], p["target"], p["field"]) for p in self.project.problems(self.library)]
+        from .authoring import content_problems
+
+        out = [diag.Diagnostic("error", p["code"], p["message"], p["target"], p["field"]) for p in self.project.problems(self.library)]
+        documents = {self.active_map: self.document} if self.document is not None and self.active_map else {}
+        for problem in content_problems(self.project, self.library, documents, include_bots=False):
+            out.append(diag.Diagnostic(problem.severity, problem.code, problem.message, problem.target, problem.field))
+        return out
 
     # -- sources --------------------------------------------------------------------------
     def identify_source(self, path: Path, on_done=None):
@@ -822,16 +853,23 @@ class EditorController:
     def export_package(self, path: Path, studio_version: str = "0", on_done=None):
         """Validate and write a content package in the background (atomic; result: path)."""
 
+        import hashlib
+
+        from . import runtime as runtime_module
         from .package import build_package
 
         project, library = self.project, self.library
         target = Path(path)
+        project.compute_dependencies(library)  # export records these; do it first so the content hash matches what is exported
+        content = runtime_module.content_sha256(project)  # the content as it is now, before any later edit
+        capabilities = self.runtime_capabilities()
 
         def work(context):
             context.progress("validating", 0, 2)
-            data = build_package(project, library, studio_version)
+            data = build_package(project, library, studio_version, capabilities)
             context.progress("writing", 1, 2)
             atomic_write_bytes(target, data)
+            self.last_export = runtime_module.ExportRecord(str(target), hashlib.sha256(data).hexdigest(), len(data), content)
             return target
 
         return self.jobs.submit(f"Exporting {target.name}", work, "export", on_done)

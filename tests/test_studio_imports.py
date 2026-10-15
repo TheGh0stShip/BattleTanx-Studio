@@ -379,7 +379,7 @@ class TeleporterTests(unittest.TestCase):
     def test_starter_ids_survive_the_version_bump(self):
         from tools.btga_studio.content import starter
 
-        self.assertEqual(starter.STARTER_VERSION, 2)
+        self.assertEqual(starter.STARTER_VERSION, 3)
         example = json.loads((ROOT / "examples" / "starter-example.btgaproj").read_text(encoding="utf-8"))
         used = {e["instance"]["model"] for m in example["maps"].values() for e in (m.get("overlay") or {}).get("edits", []) if e["op"] == "add_instance"}
         self.assertTrue(used)
@@ -572,6 +572,36 @@ class CityTests(unittest.TestCase):
         self.assertGreater(int((np.abs(pixels - pitch).max(axis=1) <= 16).sum()), 1500)  # its field (partly in this chunk) is grass
         water = np.array(osm.GROUND["water"], np.uint8)
         self.assertTrue(any(np.all(np.frombuffer(t["rgba"], np.uint8).reshape(-1, 4)[:, :3] == water, axis=1).any() for t in textures))
+        wet_norths = []
+        for instance in ground_models:
+            mesh = self.plan.result.models[instance["model"]]["mesh"]
+            positions = np.asarray(mesh["positions"])
+            for triangle in mesh["triangles"]:
+                if mesh["materials"][triangle["material"]].get("surface") == "water":
+                    corner = positions[[c["p"] for c in triangle["corners"]]].mean(axis=0)
+                    wet_norths.append(-(corner[2] + instance["translation"][2]) / osm.SCALE)
+        self.assertTrue(wet_norths)  # the river's ground is marked as water for driving
+        self.assertTrue(all(-126 < n < -74 for n in wet_norths))  # and only the river (north -120 to -80)
+
+    def test_barriers_stop_at_the_water(self):
+        projection = geo.LocalProjection(45.0, -93.0)
+
+        def point(e, n):
+            lat, lon = projection.inverse(e, n)
+            return float(lat), float(lon)
+
+        fence = osm.OsmData(ways=[{"id": 950, "tags": {"barrier": "fence"}, "coords": [point(30, -40 - 10 * k) for k in range(13)]}],
+                            sha256="fence", file="fence.json")
+        builder = osm.CityBuilder(osm.merge(self.data, fence), osm.CityOptions(centre=(45.0, -93.0), half_extent_m=256.0, chunk_m=128.0,
+                                                                                detail="high"), self.terrain)
+        builder.paint()
+        self.assertEqual(builder.is_water([(30, -100), (30, -60), (30, -140)]).tolist(), [True, False, False])
+        models, counts = builder.furniture()
+        self.assertEqual(counts["barriers"], 1)
+        norths = [-(p[2] + origin_n) / osm.SCALE for model, (origin_e, origin_n) in [(m, (o[0] * osm.SCALE, -o[1] * osm.SCALE)) for m, o in models]
+                  for p in builder.result.models[model]["mesh"]["positions"]]
+        self.assertFalse(any(-118 < n < -82 for n in norths))  # the fence breaks off at both banks
+        self.assertTrue(any(n > -80 for n in norths) and any(n < -120 for n in norths))
         self.assertIn("OpenStreetMap contributors", self.plan.credit)
         self.assertIn("USGS 3DEP", self.plan.credit)
 
@@ -634,6 +664,32 @@ class CityTests(unittest.TestCase):
                                                      fine_ground_centre=(0.0, 0.0)), self.terrain)
         sizes = sorted({t["width"] for t in mixed.result.textures.values() if t["label"].startswith("ground")})
         self.assertEqual(sizes, [128, 256])  # sharp near the centre, 1 m per pixel further out
+
+    def test_traffic_signals_stand_on_the_corners_not_in_the_road(self):
+        projection = geo.LocalProjection(45.0, -93.0)
+
+        def point(e, n):
+            lat, lon = projection.inverse(e, n)
+            return float(lat), float(lon)
+
+        centre, middle = point(0, 0), point(0, -60)
+        data = osm.OsmData(nodes=[{"id": 1, "tags": {"highway": "traffic_signals"}, "lat": centre[0], "lon": centre[1]},
+                                  {"id": 2, "tags": {"highway": "traffic_signals"}, "lat": middle[0], "lon": middle[1]}],
+                           ways=[{"id": 3, "tags": {"highway": "residential"}, "coords": [point(-100, 0), centre, point(100, 0)]},
+                                 {"id": 4, "tags": {"highway": "residential"}, "coords": [point(0, -100), middle, centre, point(0, 100)]}],
+                           sha256="signals", file="signals.json")
+        builder = osm.CityBuilder(data, osm.CityOptions(centre=(45.0, -93.0), half_extent_m=256.0, chunk_m=128.0, detail="high"))
+        corners = builder._signal_poles(data.nodes[0])
+        self.assertEqual(len(corners), 4)
+        for e, n, (ae, an) in corners:
+            self.assertGreater(min(abs(e), abs(n)), osm.ROAD_WIDTH["residential"] / 2)  # off both carriageways
+            self.assertLess(math.hypot(e + ae, n + an), math.hypot(e, n))  # the arm reaches towards the junction
+        sides = builder._signal_poles(data.nodes[1])
+        self.assertEqual(len(sides), 2)
+        self.assertEqual(sorted(round(e) for e, n, _ in sides), [-6, 6])  # either kerb of the north-south road
+        self.assertTrue(all(abs(n + 60) < 0.5 for _, n, _ in sides))
+        lone = osm.OsmData(nodes=[{"id": 9, "tags": {"highway": "traffic_signals"}, "lat": centre[0], "lon": centre[1]}], ways=[], sha256="x", file="x")
+        self.assertEqual(len(osm.CityBuilder(lone, builder.options)._signal_poles(lone.nodes[0])), 1)  # off any road: left where it was mapped
 
     def test_overpass_json_reads_like_xml(self):
         projection = geo.LocalProjection(45.0, -93.0)

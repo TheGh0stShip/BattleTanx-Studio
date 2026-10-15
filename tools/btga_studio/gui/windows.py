@@ -830,7 +830,15 @@ class ProductUI:
         context = entry.context or {}
         if context.get("map") and context["map"] != self.controller.active_map and context["map"] in self.controller.project.maps:
             self.switch_map(context["map"])
-        if context.get("tab") in GAMEPLAY_TABS:
+        if context.get("window") == "scenarios":
+            self.show_scenarios = True
+            if context.get("key") in self.controller.project.scenarios:
+                self.scenario_key = context["key"]
+        elif context.get("window") == "items":
+            self.show_items = True
+            if context.get("key") in self.controller.project.items:
+                self.item_key = context["key"]
+        elif context.get("tab") in GAMEPLAY_TABS:
             self.open_gameplay(context["tab"])
         self.controller.log("info", f"{'restored' if entry in self.defs().undo_stack else 'undid'}: {entry.label}")
 
@@ -1333,6 +1341,7 @@ class ProductUI:
                 if chosen:
                     prefs.projects_directory = str(chosen)
             self.install_section()
+            self.settings_runtime_section()
             imgui.separator()
             imgui.text("Updates")
             imgui.text_disabled("Studio does not update itself. Check the Releases page for new versions.")
@@ -1848,6 +1857,15 @@ class ProductUI:
             self.save()
         self.anchor("toolbar.save")
         tooltip("Save the project (Ctrl+S)")
+        imgui.same_line()
+        if imgui.button("Stop Drive Preview" if getattr(self, "drive", None) is not None else "Drive Preview"):
+            self.stop_drive_preview() if self.drive is not None else self.start_drive_preview()
+        self.anchor("toolbar.drive")
+        tooltip("Drive Preview (F5): an editor approximation for checking layout, scale, blocked movement, water, spawn facing, "
+                "navigation reach, trigger areas, pickups and bots. It runs no game physics, AI, combat, destruction, pickups or "
+                "scripting. Starts at the selected spawn, or on the ground in the middle of the view.")
+        imgui.same_line()
+        self.test_in_game_button()
 
     def status_text(self) -> str:
         c = self.controller

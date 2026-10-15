@@ -19,6 +19,11 @@ import math
 
 import numpy as np
 from OpenGL import GL as gl
+from OpenGL.raw.GL.VERSION.GL_1_1 import glBindTexture as raw_bind_texture
+from OpenGL.raw.GL.VERSION.GL_1_1 import glDrawArrays as raw_draw_arrays
+from OpenGL.raw.GL.VERSION.GL_2_0 import glUniform1i as raw_uniform_1i
+from OpenGL.raw.GL.VERSION.GL_2_0 import glVertexAttribPointer as raw_vertex_attrib_pointer
+from OpenGL.raw.GL.VERSION.GL_3_0 import glBindVertexArray as raw_bind_vertex_array
 
 from tools.btga_studio.core import geometry as g
 from tools.btga_studio.core import sky as sky_module
@@ -74,7 +79,17 @@ LAYER_COLOURS = {
     "selection": (1.0, 0.95, 0.2, 1.0),
     "preview": (0.3, 1.0, 0.4, 1.0),
     "disabled": (0.5, 0.5, 0.5, 1.0),
+    "trigger_volume": (1.0, 0.85, 0.2, 1.0),
+    "capture_zone": (0.35, 0.65, 1.0, 1.0),
+    "hazard": (1.0, 0.3, 0.25, 1.0),
+    "teleporter": (0.8, 0.4, 1.0, 1.0),
+    "spawn": (0.35, 1.0, 0.45, 1.0),
+    "bot": (1.0, 0.45, 0.85, 1.0),
+    "reachable": (0.3, 1.0, 0.4, 1.0),
+    "unreachable": (1.0, 0.3, 0.3, 1.0),
 }
+VOLUME_CATEGORIES = ("trigger_volume", "capture_zone", "hazard", "teleporter")
+SPAWN_ARROW_CATEGORIES = ("player_spawn", "team_start", "team_spawn_slot", "bot_slot")
 
 
 def _compile(source: str, kind) -> int:
@@ -86,11 +101,13 @@ def _compile(source: str, kind) -> int:
     return shader
 
 
-def mesh_vertices(mesh, translation=None, yaw=0) -> dict[str | None, np.ndarray]:
+def mesh_vertices(mesh, translation=None, yaw=0, scale=None) -> dict[str | None, np.ndarray]:
     """Interleaved float32 vertices per texture for one mesh, optionally in world space."""
 
     corners = mesh.corners
     if translation is not None:
+        if scale is not None:
+            corners = corners * np.asarray(scale, float)
         corners = corners @ g.yaw_matrix3(yaw).T + np.asarray(translation, float)
     out = {}
     for material_index in np.unique(mesh.triangle_materials) if mesh.triangle_count else []:
@@ -116,7 +133,9 @@ class Batch:
         stride = FLOATS * 4
         for location, size, offset in ((0, 3, 0), (1, 2, 12), (2, 4, 20)):
             gl.glEnableVertexAttribArray(location)
-            gl.glVertexAttribPointer(location, size, gl.GL_FLOAT, False, stride, ctypes.c_void_p(offset))
+            # The raw entry point: PyOpenGL's wrapper also files the pointer under the current context, which fails
+            # where it cannot identify that context (WSLg); these are offsets into our own buffer, so nothing needs keeping.
+            raw_vertex_attrib_pointer(location, size, gl.GL_FLOAT, gl.GL_FALSE, stride, ctypes.c_void_p(offset))
         gl.glBindVertexArray(0)
 
     def write(self, start: int, vertices: np.ndarray) -> None:
@@ -124,16 +143,79 @@ class Batch:
         gl.glBufferSubData(gl.GL_ARRAY_BUFFER, start * FLOATS * 4, vertices.nbytes, vertices)
 
     def draw(self, mode=gl.GL_TRIANGLES) -> None:
+        # Raw entry points: these run thousands of times a frame, and the wrappers' per-call glGetError dominates.
         if self.count:
-            gl.glBindVertexArray(self.vao)
-            gl.glDrawArrays(mode, 0, self.count)
+            raw_bind_vertex_array(self.vao)
+            raw_draw_arrays(mode, 0, self.count)
 
     def delete(self) -> None:
         gl.glDeleteBuffers(1, [self.vbo])
         gl.glDeleteVertexArrays(1, [self.vao])
 
 
-def navigation_segments(scene, hidden=frozenset()) -> list:
+def authoring_segments(scene, hidden=frozenset()) -> list:
+    """Authoring overlay lines: trigger volumes, zones, damage areas and teleporter pads as their real extent, spawn and
+    bot facing arrows, each bot's line to its target and its patrol route.  Pure function of the scene (tested without OpenGL)."""
+
+    out: list = []
+    records = {record["id"]: record for _, record in scene.records("markers") if not record.get("disabled") and record["id"] not in hidden}
+
+    def ring(x, y, z, radius, colour, steps=40):
+        points = [(x + radius * math.cos(2 * math.pi * i / steps), y + 4.0, z + radius * math.sin(2 * math.pi * i / steps)) for i in range(steps + 1)]
+        for a, b in zip(points[:-1], points[1:]):
+            out.extend([(a, colour), (b, colour)])
+
+    for record_id in sorted(records):
+        record = records[record_id]
+        category = record.get("category")
+        fields = record.get("fields", {})
+        x, y, z = (float(v) for v in record["translation"])
+        if category in VOLUME_CATEGORIES:
+            colour = LAYER_COLOURS[category]
+            if category == "trigger_volume" and (fields.get("shape") or {}).get("value") == 1:
+                hx = float((fields.get("half_x") or {}).get("value") or 100)
+                hz = float((fields.get("half_z") or {}).get("value") or 100)
+                height = float((fields.get("height") or {}).get("value") or 100)
+                theta = g.yaw_radians(record.get("yaw", 0))
+                c, s_ = math.cos(theta), math.sin(theta)
+                corners = [(x + a * c + b * s_, z - a * s_ + b * c) for a, b in ((-hx, -hz), (hx, -hz), (hx, hz), (-hx, hz))]
+                for level in (y + 4.0, y + height):
+                    for (ax, az), (bx, bz) in zip(corners, corners[1:] + corners[:1]):
+                        out.extend([((ax, level, az), colour), ((bx, level, bz), colour)])
+                for ax, az in corners:
+                    out.extend([((ax, y + 4.0, az), colour), ((ax, y + height, az), colour)])
+            else:
+                ring(x, y, z, float((fields.get("radius") or {}).get("value") or 90), colour)
+        if category in SPAWN_ARROW_CATEGORIES:
+            colour = LAYER_COLOURS["bot" if category == "bot_slot" else "spawn"]
+            theta = g.yaw_radians(record.get("yaw", 0))
+            forward = (-math.sin(theta), -math.cos(theta))
+            side = (-forward[1], forward[0])
+            tip = (x + forward[0] * 140, y + 12.0, z + forward[1] * 140)
+            out.extend([((x, y + 12.0, z), colour), (tip, colour)])
+            for sign in (1, -1):
+                out.extend([(tip, colour), ((tip[0] - forward[0] * 40 + sign * side[0] * 25, tip[1], tip[2] - forward[1] * 40 + sign * side[1] * 25), colour)])
+        if category == "bot_slot":
+            colour = LAYER_COLOURS["bot"]
+            for name in ("patrol_start", "guard_target", "capture_target", "escort_target"):
+                target = records.get((fields.get(name) or {}).get("value"))
+                if target is not None:
+                    tx, ty, tz = target["translation"]
+                    out.extend([((x, y + 30.0, z), colour), ((tx, ty + 30.0, tz), colour)])
+            node = records.get((fields.get("patrol_start") or {}).get("value"))
+            seen = set()
+            while node is not None and node["id"] not in seen and len(seen) < 64:
+                seen.add(node["id"])
+                following = records.get((node.get("fields", {}).get("link_0") or {}).get("value"))
+                if following is None:
+                    break
+                a, b = node["translation"], following["translation"]
+                out.extend([((a[0], a[1] + 20.0, a[2]), colour), ((b[0], b[1] + 20.0, b[2]), colour)])
+                node = following
+    return out
+
+
+def navigation_segments(scene, hidden=frozenset(), reach: set | None = None) -> list:
     """Navigation overlay lines: source navigation points, plus authored ``navigation_node`` markers and their links.
 
     Blank Studio maps have no source navigation table; their graph lives in the
@@ -144,10 +226,11 @@ def navigation_segments(scene, hidden=frozenset()) -> list:
     colour = LAYER_COLOURS["navigation"]
     out: list = []
 
-    def cross(x, y, z):
+    def cross(x, y, z, node_colour=None):
+        node_colour = node_colour or colour
         p = np.array([x, y, z], float)
         for d in ((16, 0, 0), (0, 0, 16), (0, 32, 0)):
-            out.extend([(tuple(p - d), colour), (tuple(p + d), colour)])
+            out.extend([(tuple(p - d), node_colour), (tuple(p + d), node_colour)])
 
     for point in (scene.navigation or {}).get("points", []):
         cross(point["x"], 0.0, point["z"])
@@ -156,7 +239,7 @@ def navigation_segments(scene, hidden=frozenset()) -> list:
     for record_id in sorted(nodes):
         record = nodes[record_id]
         x, y, z = record["translation"]
-        cross(x, y, z)
+        cross(x, y, z, None if reach is None else LAYER_COLOURS["reachable" if record_id in reach else "unreachable"])
         for name in sorted(record.get("fields", {})):
             target = nodes.get(record["fields"][name].get("value")) if name.startswith("link_") else None
             if target is not None:
@@ -192,6 +275,10 @@ class ViewportRenderer:
         self.wireframe = False
         self.layers = {"geometry": True, "collision": True, "markers": True, "navigation": True, "bounds": True, "grid": True, "unresolved": True}
         self.draw_calls = 0
+        self.authoring_overlays = True  # trigger volumes, zones, spawn and bot arrows, bot targets (authoring_segments)
+        self.reach: set | None = None  # navigation nodes reachable from the Drive Preview tank (others are drawn red)
+        self.marker_model = None  # callable(record) -> model ID drawn at a marker (bots, targets, item pickups), or None
+        self.extras: list[tuple] = []  # (model id, translation, yaw units, scale) drawn on top of the scene, such as the Drive Preview tank
 
     # -- resources --------------------------------------------------------------
     def _upload_texture(self, width, height, rgba: bytes, wrap_s: str, wrap_t: str) -> int:
@@ -246,11 +333,15 @@ class ViewportRenderer:
         if environment:
             self.background = tuple(v / 255 for v in environment["clear_and_fog_colour"])
         per_texture: dict[str | None, list[tuple[str, np.ndarray]]] = {}
-        for record_id, (family, record) in scene.base_index.items():
+        # Bake every model present now (source records and ones added in Studio) into per-texture batches;
+        # only records edited, selected or removed later are drawn one by one.
+        self.baked: dict[str, dict] = {}
+        for record_id, (family, record) in scene.view.items():
             if family != "instances":
                 continue
+            self.baked[record_id] = record
             mesh = scene.meshes.get(record["model"])
-            for texture, vertices in mesh_vertices(mesh, record["translation"], record["yaw"]).items():
+            for texture, vertices in mesh_vertices(mesh, record["translation"], record["yaw"], record.get("scale")).items():
                 per_texture.setdefault(texture, []).append((record_id, vertices))
         for texture, parts in sorted(per_texture.items(), key=lambda item: str(item[0])):
             batch = Batch(texture, np.concatenate([v for _, v in parts]))
@@ -271,6 +362,7 @@ class ViewportRenderer:
         if self.lines:
             self.lines.delete()
         self.batches, self.ranges, self.hidden, self.model_batches, self.lines = [], {}, set(), {}, None
+        self.baked = {}
         self.scene = None
 
     def _sync_dynamic(self, live: set[str]) -> None:
@@ -297,8 +389,8 @@ class ViewportRenderer:
         for record_id, (family, record) in scene.view.items():
             if family != "instances":
                 continue
-            base = scene.base_index.get(record_id)
-            if base is None or record is not base[1] or record_id in selection:
+            baked = self.baked.get(record_id)
+            if baked is None or record is not baked or record_id in selection:
                 live.add(record_id)
         live |= {r for r in self.ranges if scene.record(r) is None}
         return live
@@ -384,7 +476,9 @@ class ViewportRenderer:
                 scale = np.asarray(record.get("scale") or (1.0, 1.0, 1.0), float)
                 self._box_lines(segments, mesh.lo * scale, mesh.hi * scale, record["translation"], record["yaw"], LAYER_COLOURS["selection"])
         if layers.get("navigation"):
-            segments += navigation_segments(scene, self.user_hidden)
+            segments += navigation_segments(scene, self.user_hidden, self.reach)
+        if layers.get("markers", True) and self.authoring_overlays:
+            segments += authoring_segments(scene, self.user_hidden)
         if preview:
             self._box_lines(segments, preview["lo"], preview["hi"], preview["translation"], preview.get("yaw", 0), LAYER_COLOURS["preview"])
         boxes = [s for s in segments if len(s) == 6 and s[0] == "box"]
@@ -399,6 +493,21 @@ class ViewportRenderer:
             out[len(plain):, 0:3] = box_points
             out[len(plain):, 5:9] = box_colours
         return out
+
+    MODEL_MARKERS = ("bot_slot", "destructible_target", "item_pickup",
+                     # original game records that create an object from a model of their own (see AuthoringUI.marker_models)
+                     "destructible", "building", "structure", "turret", "turret_emplacement", "turret_random", "static_prop", "foliage",
+                     "effect_prop", "multiplayer_structure", "powerup_pad", "crate", "objective", "mission_trigger")
+
+    def _model_markers(self) -> list[dict]:
+        """Enabled markers that are drawn with a chosen model (cached per scene version)."""
+
+        key = (id(self.scene), self.scene.version)
+        if getattr(self, "_model_markers_key", None) != key:
+            self._model_markers_cache = [r for _, r in self.scene.records("markers") if r.get("category") in self.MODEL_MARKERS
+                                         and not r.get("disabled")]
+            self._model_markers_key = key
+        return self._model_markers_cache
 
     # -- frame ---------------------------------------------------------------------
     def render(self, camera: g.Camera, width: int, height: int, selection: set[str] = frozenset(), preview: dict | None = None) -> int:
@@ -435,8 +544,8 @@ class ViewportRenderer:
             self._draw_sky(sky, camera)
         if self.layers.get("geometry", True):
             for batch in self.batches:
-                gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture(batch.texture))
-                gl.glUniform1i(self.uniforms["textured"], 1 if batch.texture else 0)
+                raw_bind_texture(gl.GL_TEXTURE_2D, self.texture(batch.texture))
+                raw_uniform_1i(self.uniforms["textured"], 1 if batch.texture else 0)
                 batch.draw()
                 self.draw_calls += 1
             for record_id in sorted(live):
@@ -449,6 +558,29 @@ class ViewportRenderer:
                 tint = (0.5, 0.5, 0.5, 1.0) if record.get("disabled") else ((1.0, 1.0, 0.6, 1.0) if record_id in selection else (1, 1, 1, 1))
                 gl.glUniform4f(self.uniforms["tint"], *tint)
                 for batch in self._model_batches(record["model"]):
+                    raw_bind_texture(gl.GL_TEXTURE_2D, self.texture(batch.texture))
+                    raw_uniform_1i(self.uniforms["textured"], 1 if batch.texture else 0)
+                    batch.draw()
+                    self.draw_calls += 1
+            if self.marker_model is not None and self.layers.get("markers", True):
+                for record in self._model_markers():
+                    if record["id"] in self.user_hidden:
+                        continue
+                    tint = (1.0, 1.0, 0.6, 1.0) if record["id"] in selection else (1, 1, 1, 1)
+                    for model_id in self.marker_model(record) or []:
+                        if self.library is None or model_id not in self.library._models:
+                            continue
+                        gl.glUniformMatrix4fv(self.uniforms["model"], 1, True, g.model_matrix(record["translation"], record["yaw"], None).astype(np.float32))
+                        gl.glUniform4f(self.uniforms["tint"], *tint)
+                        for batch in self._model_batches(model_id):
+                            raw_bind_texture(gl.GL_TEXTURE_2D, self.texture(batch.texture))
+                            raw_uniform_1i(self.uniforms["textured"], 1 if batch.texture else 0)
+                            batch.draw()
+                            self.draw_calls += 1
+            for model_id, translation, yaw, scale in self.extras:
+                gl.glUniformMatrix4fv(self.uniforms["model"], 1, True, g.model_matrix(translation, yaw, scale).astype(np.float32))
+                gl.glUniform4f(self.uniforms["tint"], 1, 1, 1, 1)
+                for batch in self._model_batches(model_id):
                     gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture(batch.texture))
                     gl.glUniform1i(self.uniforms["textured"], 1 if batch.texture else 0)
                     batch.draw()
@@ -457,7 +589,8 @@ class ViewportRenderer:
             gl.glUniform4f(self.uniforms["tint"], 1, 1, 1, 1)
         gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_FILL)
         gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
-        key = (self.scene.version, tuple(sorted(selection)), tuple(sorted(self.layers.items())), repr(preview), tuple(sorted(self.user_hidden)))
+        key = (self.scene.version, tuple(sorted(selection)), tuple(sorted(self.layers.items())), repr(preview), tuple(sorted(self.user_hidden)),
+               self.authoring_overlays, None if self.reach is None else tuple(sorted(self.reach)))
         if key != self.lines_key:
             if self.lines:
                 self.lines.delete()

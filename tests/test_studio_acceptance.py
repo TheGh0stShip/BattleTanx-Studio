@@ -294,9 +294,10 @@ class AcceptanceRegressionTests(unittest.TestCase):
         self.assertEqual(len(nodes), 3)
         self.assertIsNone(document.scene.navigation)  # blank maps carry no source navigation table
         segments = navigation_segments(document.scene)
-        crosses, links = 3 * 6, 3 * 2  # three nodes; links 0->1, 1->2, 1->0
+        crosses, links = 3 * 6, 4 * 2  # three nodes; links 0->1, 1->2, 1->0 and 2->1 (the patrol's way back)
         self.assertEqual(len(segments), crosses + links)
-        self.assertEqual(len(navigation_segments(document.scene, {nodes[0]})), 2 * 6 + 2)
+        hidden = next(n for n in nodes if document.record(n)["translation"][2] == 600.0)  # the first node (at the south end)
+        self.assertEqual(len(navigation_segments(document.scene, {hidden})), 2 * 6 + 2 * 2)
 
     def test_user_placed_assets_use_their_model_for_thumbnails(self):
         from concurrent.futures import ThreadPoolExecutor

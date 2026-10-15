@@ -1,7 +1,10 @@
 """ROM-free example project built only from Studio starter content.
 
-It contains a small mission map with a one-mission campaign, a
-multiplayer arena, a target-range minigame, placeholder tanks and two gangs.
+It contains a small mission map with a one-mission campaign and its
+scenario (ordered and optional objectives, a trigger volume, a capture
+zone, a destructible target, a timer, a counter, a wave and two bots), item
+definitions with pickups, a multiplayer arena, a target-range minigame,
+placeholder tanks and two gangs.
 Generation is deterministic (fixed project ID, fixed layout), so the
 committed example equals a fresh build.
 
@@ -21,6 +24,8 @@ if str(ROOT) not in sys.path:
 
 from tools.btga_studio.content.starter import ensure_starter_catalog  # noqa: E402
 from tools.btga_studio.core.library import LibrarySet  # noqa: E402
+from tools.btga_studio.core import items as items_module  # noqa: E402
+from tools.btga_studio.core import scenario as scenario_module  # noqa: E402
 from tools.btga_studio.core.project import StudioProject, save_project  # noqa: E402
 
 EXAMPLE_ID = "5747a2e1c0ffee01"
@@ -62,7 +67,47 @@ def build_example(library: LibrarySet) -> StudioProject:
     doc.set_field(nodes[0], "link_0", nodes[1])
     doc.set_field(nodes[1], "link_0", nodes[2])
     doc.set_field(nodes[1], "link_1", nodes[0])
-    project.define("missions", "first_strike", {"title": "First strike", "map": "training_grounds", "objectives": [objective],
+    doc.set_field(nodes[2], "link_0", nodes[1])  # the far end leads back, so a patrol can turn round
+    spawn = next(r["id"] for _, r in doc.scene.records("markers") if r.get("category") == "player_spawn")
+    gate = _marker(doc, templates, "trigger_volume", (0.0, 0.0, 200.0), values={"radius": 160, "label": "Gate"})
+    hill = _marker(doc, templates, "capture_zone", (500.0, 0.0, 0.0), values={"radius": 220, "label": "East hill"})
+    depot = _marker(doc, templates, "destructible_target", (0.0, 0.0, -480.0), values={"health": 800, "label": "Fuel depot"})
+    escort = _marker(doc, templates, "bot", (-150.0, 0.0, 700.0), 0x8000, values={"ai_slot": 0, "team": 0, "role": 5, "model": models["tank_placeholder"]})
+    _marker(doc, templates, "bot", (0.0, 0.0, -600.0), 0, values={"ai_slot": 1, "team": 1, "role": 2, "patrol_start": nodes[2],
+                                                                 "model": models["tank_placeholder"], "aggression": 70})
+    project.define("items", "repair_kit", items_module.new_item("repair_kit"))
+    project.define("items", "speed_boost", items_module.new_item("speed_boost"))
+    for x in (-400.0, 400.0):
+        _marker(doc, templates, "item_pickup", (x, 0.0, 600.0), values={"item": "repair_kit", "respawn_seconds": 45})
+    _marker(doc, templates, "item_pickup", (0.0, 0.0, 450.0), values={"item": "speed_boost"})
+    scenario = scenario_module.new_scenario("First strike", "training_grounds")
+    scenario["start"].update({"player_spawn": spawn, "briefing": "Drive through the gate, take the east hill, then destroy the fuel depot."})
+    reach = scenario_module.add_element(scenario, "objectives", "reach", "Drive through the gate")
+    scenario["objectives"][reach]["params"]["area"] = gate
+    take = scenario_module.add_element(scenario, "objectives", "capture", "Take the east hill")
+    scenario["objectives"][take]["params"].update({"zone": hill, "hold_seconds": 15})
+    scenario["objectives"][take]["requires"] = [reach]
+    smash = scenario_module.add_element(scenario, "objectives", "destroy", "Destroy the fuel depot")
+    scenario["objectives"][smash]["params"]["targets"] = [depot]
+    scenario["objectives"][smash]["requires"] = [take]
+    bonus = scenario_module.add_element(scenario, "objectives", "marker_objective", "Bonus: the depot marker")
+    scenario["objectives"][bonus].update({"optional": True, "params": {"marker": objective}})
+    clock = scenario_module.add_element(scenario, "timers", "Reinforcements")
+    scenario["timers"][clock].update({"seconds": 90, "starts": "by_action"})
+    kills = scenario_module.add_element(scenario, "counters", "Tanks destroyed")
+    wave = scenario_module.add_element(scenario, "waves", "Counter-attack")
+    scenario["waves"][wave].update({"spawner": next(r["id"] for _, r in doc.scene.records("markers") if r.get("category") == "unit_spawner"),
+                                    "count": 3})
+    trigger = scenario_module.add_element(scenario, "triggers", "At the gate")
+    scenario["triggers"][trigger].update({"volume": gate, "actions": [
+        {"do": "message", "text": "The east hill is guarded. Take it!", "seconds": 5, "audience": "player"},
+        {"do": "start_timer", "timer": clock}]})
+    scenario["timers"][clock]["on_expire"] = [{"do": "spawn_wave", "wave": wave}, {"do": "counter_add", "counter": kills, "amount": 0}]
+    scenario["objectives"][smash]["on_complete"] = [{"do": "message", "text": "Depot destroyed!", "seconds": 4, "audience": "everyone"}]
+    group = scenario_module.add_element(scenario, "groups", "Escort")
+    scenario["groups"][group]["members"] = [escort]
+    project.define("scenarios", "first_strike", scenario)
+    project.define("missions", "first_strike", {"title": "First strike", "map": "training_grounds", "objectives": [objective], "scenario": "first_strike",
                                                 "briefing": "Destroy the depot at the north end of the training grounds."})
     project.campaigns.append({"id": "tutorial", "title": "Tutorial", "missions": ["first_strike"]})
 

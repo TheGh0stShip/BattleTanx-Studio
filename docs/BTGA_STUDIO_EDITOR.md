@@ -218,6 +218,29 @@ Map-object edits keep their per-map stacks; gameplay definitions (project name a
 | `tools/audit_studio_package.py DIST [--manifest M] [--forbid TEXT]`, `--compare A B` | a packaged folder | PE subsystem, required files, forbidden file types, forbidden text (ASCII and UTF-16LE), manifest; differing files between two builds | constant memory (4 MiB scan windows) |
 | `tools/benchmark_studio_cycles.py [--cycles N]` | starter content | open/edit/undo/validate latency, per-cycle RSS and traced heap, second-half spread | samples are preallocated so the probe does not measure itself |
 
+## Scenarios, items, bots and Test in Game
+
+Tools > Scenario editor, Tools > Items and pickups and the bot Inspector edit
+the platform-neutral authoring model described in `STUDIO_AUTHORING.md`.
+Every edit is one undo step; nothing is typed as JSON or as internal IDs.
+
+**Drive Preview** (F5) is an editor approximation for
+authoring checks: tank and map scale, collision outlines and blocked movement,
+water, spawn facing, navigation reach (points connected to the tank's nearest
+point are green, others red), trigger volumes, zones, pickups and bots. It
+runs no game physics, AI, combat, destruction, pickups or scripting, and says
+so on screen; teleporter pads and pickups only produce notices.
+
+**Test in Game** is disabled until a compatible PC runtime is configured; the
+contract (capabilities file, launch request, pre-flight errors) is in
+`RUNTIME_LAUNCH.md`, the feature matrix in `RUNTIME_FEATURES.md`, and the
+capture specification for a future in-game recording in
+`RUNTIME_CAPTURE_SPEC.md`.
+
+View > Models of game records draws the model an original Global Assault
+record creates (destructible props, bases, turrets, objectives) at the
+record's position and facing; the exact in-game placement is inferred.
+
 ## Windows build
 
 `tools/btga_studio/packaging/build_windows.ps1` creates an isolated venv with Python 3.13 (`-PythonVersion`; `py -3` would pick the newest installed interpreter), installs the pinned requirements, writes the Windows version resource and `data/build.json` (`release.py prepare`), freezes `BattleTanxStudio.exe` with PyInstaller (windowed; the Global Assault level table is bundled as data so N64 catalogs build in the packaged program), adds the synthetic sample, the ROM-free starter example, `README.txt`, `COPYING.txt` and `THIRD-PARTY-NOTICES.txt`, and writes `release/` with a deterministic ZIP, `SHA256SUMS.txt` and `build-manifest.json` (`release.py finalize`).

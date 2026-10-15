@@ -5,8 +5,10 @@ ZIP archive written deterministically (entries sorted, stored uncompressed,
 fixed 1980-01-01 timestamps, no extra fields), so the same project yields
 byte-identical packages on every platform.  Layout:
 
-    manifest.json                schema, versions, project identity, source hashes, file list with SHA-256
-    project.json                 metadata, campaigns, missions, multiplayer, minigames, tanks, gangs
+    manifest.json                schema, versions, project identity, source hashes, file list with SHA-256,
+                                 the runtime features the content needs and its playability status
+    project.json                 metadata, campaigns, missions, multiplayer, minigames, tanks, gangs, scenarios, items
+    dependencies.json            every game resource the content needs, by content ID and source hash (core.authoring)
     maps/<key>.json              one per map (see MAP CONTRACT in docs/CONTENT_PACKAGE.md)
     resources/models/<id>.json   Studio-original and user-imported models used by the package (neutral mesh)
     resources/textures/<id>.rgba Studio-original and user-imported textures: u16 width, u16 height (LE), RGBA8 rows
@@ -18,7 +20,12 @@ computer can restore them into its library.
 
 Game-derived models and textures are referenced by content ID only; the
 runtime resolves them from its own locally extracted data and checks the
-source hashes in the manifest.  Raw and unresolved source fields travel
+source hashes in the manifest.  A resource the loaded catalogs cannot
+resolve is a validation error, so it is never silently replaced.
+
+``playability`` in the manifest is "unverified" unless a PC runtime's
+declared capabilities were given (``core.runtime``): Studio validates content
+but never claims a runtime plays it.  Raw and unresolved source fields travel
 unchanged inside records (``raw_hex``, ``unknown_bytes``).
 """
 
@@ -44,7 +51,7 @@ PACKAGE_VERSION = 1
 STARTER_PLATFORMS = ("studio", "user")  # resources embedded in packages (Studio-original and user-imported)
 LIMITS = {"package_bytes": 256 * 1024 * 1024, "file_bytes": 64 * 1024 * 1024, "files": 20_000, "maps": 256, "records_per_map": 200_000}
 TIMESTAMP = (1980, 1, 1, 0, 0, 0)
-SAFE_NAME = re.compile(r"^(manifest\.json|project\.json|maps/[a-z0-9_]{1,48}\.json|resources/(models|textures)/[a-z0-9_]{1,128}\.(json|rgba))$")
+SAFE_NAME = re.compile(r"^(manifest\.json|project\.json|dependencies\.json|maps/[a-z0-9_]{1,48}\.json|resources/(models|textures)/[a-z0-9_]{1,128}\.(json|rgba))$")
 
 
 class PackageError(ValueError):
@@ -88,9 +95,12 @@ TARGET_KINDS = {
 def validate_for_export(project: StudioProject, library) -> PackageReport:
     """Everything that would make the package wrong or unloadable, with object and field."""
 
+    from . import authoring
+
     errors, warnings = [], []
     for problem in project.problems(library):
         errors.append({**problem, "map": None})
+    documents = {}
     if not project.maps:
         errors.append({"code": "EMPTY_PROJECT", "target": "maps", "field": None, "map": None, "message": "the project has no maps"})
     if len(project.maps) > LIMITS["maps"]:
@@ -102,6 +112,7 @@ def validate_for_export(project: StudioProject, library) -> PackageReport:
         except Exception as error:  # mismatched or missing source
             errors.append({"code": "MAP_UNAVAILABLE", "target": f"maps:{key}", "field": "scene", "map": key, "message": str(error)})
             continue
+        documents[key] = document
         platform = document.scene.base["source"].get("platform")
         if entry.kind == "imported" and target not in ("studio", platform):
             errors.append({"code": "UNSUPPORTED_FEATURE", "target": f"maps:{key}", "field": "scene", "map": key,
@@ -119,6 +130,9 @@ def validate_for_export(project: StudioProject, library) -> PackageReport:
                                "message": f"{kind} records cannot be loaded for target {target}"})
         if len(document.scene.view) > LIMITS["records_per_map"]:
             errors.append({"code": "LIMIT", "target": f"maps:{key}", "field": None, "map": key, "message": "too many records"})
+    for problem in authoring.content_problems(project, library, documents, include_bots=False):
+        record = {"code": problem.code, "target": problem.target, "field": problem.field, "map": None, "message": problem.message}
+        (errors if problem.severity == "error" else warnings).append(record)
     if target != "studio" and (project.minigames or project.gangs):
         warnings.append({"code": "UNSUPPORTED_FEATURE", "target": "project", "field": "minigames/gangs", "map": None,
                          "message": f"minigames and gangs are Studio extensions; the {target} runtime path may ignore them"})
@@ -165,8 +179,14 @@ def _navigation_from_markers(markers: list[dict]) -> dict:
     return {"points": points, "links": sorted(links)}
 
 
-def build_package(project: StudioProject, library, studio_version: str = "0") -> bytes:
-    """Validate and build the package bytes; raises PackageError listing blocking errors."""
+def build_package(project: StudioProject, library, studio_version: str = "0", capabilities: dict | None = None) -> bytes:
+    """Validate and build the package bytes; raises PackageError listing blocking errors.
+
+    ``capabilities``: a PC runtime's declared capabilities (``core.runtime``); without them playability is "unverified".
+    """
+
+    from . import authoring
+    from . import runtime as runtime_module
 
     report = validate_for_export(project, library)
     if not report.ok:
@@ -175,14 +195,21 @@ def build_package(project: StudioProject, library, studio_version: str = "0") ->
     project.compute_dependencies(library)
     files: dict[str, bytes] = {}
     models_used: set[str] = set()
+    documents = {}
     for key, entry in sorted(project.maps.items()):
-        document = project.open_map(key, library)
+        document = documents[key] = project.open_map(key, library)
         data, used = _map_document(key, entry, document, library)
         models_used |= used
         files[f"maps/{key}.json"] = _compact(data)
     for tank in project.tanks.values():
         if isinstance(tank.get("model"), str):
             models_used.add(tank["model"])
+    for item in project.items.values():
+        if isinstance(item, dict) and isinstance(item.get("model"), str) and item["model"]:
+            models_used.add(item["model"])
+    dependency_report = authoring.dependency_report(project, library, documents)
+    files["dependencies.json"] = _json(dependency_report)
+    required = runtime_module.project_features(project, documents)
     textures_used = set()
     credits = []
     for key, entry in sorted(project.maps.items()):
@@ -211,17 +238,21 @@ def build_package(project: StudioProject, library, studio_version: str = "0") ->
     meta = project.as_dict()
     files["project.json"] = _json({"project": meta["project"], "campaigns": meta["campaigns"], "missions": meta["missions"],
                                    "multiplayer": meta["multiplayer"], "minigames": meta["minigames"], "tanks": meta["tanks"],
-                                   "gangs": meta["gangs"], "extra": meta.get("extra", {}),
+                                   "gangs": meta["gangs"], "scenarios": meta["scenarios"], "items": meta["items"], "extra": meta.get("extra", {}),
                                    "unknown": {k: v for k, v in meta.items() if k not in ("schema", "schema_version", "project", "dependencies",
                                                                                           "maps", "campaigns", "missions", "multiplayer",
-                                                                                          "minigames", "tanks", "gangs", "extra")}})
+                                                                                          "minigames", "tanks", "gangs", "scenarios", "items",
+                                                                                          "extra")}})
     manifest = {
         "schema": PACKAGE_SCHEMA, "schema_version": PACKAGE_VERSION, "studio_version": studio_version,
         "project": {"id": project.project["id"], "title": project.project["title"], "target": project.project["target"]},
         "schema_versions": {"project": PROJECT_VERSION, "overlay": overlay_module.OVERLAY_VERSION, "semantics": 3,
                             "starter": project.dependencies.get("starter")},
         "sources": project.dependencies.get("sources", []),
-        "game_resources": sorted(m for m in models_used if not m.startswith(tuple(f"{p}:" for p in STARTER_PLATFORMS))),
+        "game_resources": sorted({row["id"] for row in dependency_report["game_resources"] if row["kind"] == "model"}
+                                 | {m for m in models_used if not m.startswith(tuple(f"{p}:" for p in STARTER_PLATFORMS))}),
+        "features_required": sorted(required),
+        "playability": runtime_module.playability(required, capabilities),
         "files": [{"path": name, "sha256": hashlib.sha256(data).hexdigest(), "size": len(data)} for name, data in sorted(files.items())],
         "warnings": report.warnings,
     }
@@ -271,6 +302,7 @@ class Package:
     maps: dict[str, dict]
     models: dict[str, dict]
     textures: dict[str, tuple[int, int, bytes]]
+    dependencies: dict | None = None
 
 
 def read_package(data: bytes) -> Package:
@@ -388,7 +420,18 @@ def read_package(data: bytes) -> Package:
             texture = material.get("texture") if isinstance(material, dict) else None
             if texture and _stem(str(texture)) not in textures:
                 raise PackageError(f"model {model_id}: field texture: missing dependency {texture}")
-    return Package(manifest, project, maps, models, textures)
+    dependencies = None
+    if "dependencies.json" in contents:
+        try:
+            dependencies = json.loads(contents["dependencies.json"])
+        except ValueError as error:
+            raise PackageError(f"dependencies.json is not JSON: {error}") from error
+        if not isinstance(dependencies, dict) or not isinstance(dependencies.get("game_resources"), list):
+            raise PackageError("dependencies.json is not a dependency report")
+    for name in ("scenarios", "items"):
+        if not isinstance(project.get(name, {}), dict):
+            raise PackageError(f"project.json field {name} must be an object")
+    return Package(manifest, project, maps, models, textures, dependencies)
 
 
 def _number(value) -> bool:

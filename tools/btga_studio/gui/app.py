@@ -32,6 +32,8 @@ from tools.btga_studio.core import desktop, hub
 from tools.btga_studio.gui.input import BINDABLE_KEYS, DEFAULT_BINDINGS, InputState, commands, validate_bindings
 from tools.btga_studio.gui import fonts
 from tools.btga_studio.gui.help import TOPICS as HELP_TOPICS
+from tools.btga_studio.gui.authoring import AuthoringUI
+from tools.btga_studio.gui.drive_preview import DrivePreviewUI
 from tools.btga_studio.gui.windows import ProductUI, friendly_ids, tooltip
 
 gizmo = imguizmo.im_guizmo
@@ -50,6 +52,8 @@ LAYER_HELP = {
     "minimap": "The area the in-game minimap shows.",
     "unresolved": "Records from your game whose purpose is not known yet. Studio shows them but will not change them.",
     "grid": "A reference grid on the ground with the map's centre axes.",
+    "record_models": "Draws the model an original game record creates (destructible props, bases, turrets) at the record's position and "
+                     "facing. Where the game puts it exactly is inferred, not decoded.",
 }
 
 
@@ -70,7 +74,7 @@ def _vec(v) -> tuple:
     return (float(v[0]), float(v[1]))
 
 
-class StudioApp(ProductUI):
+class StudioApp(ProductUI, DrivePreviewUI, AuthoringUI):
     def __init__(self, settings: Settings, catalog: Path | None = None, project: Path | None = None, controller: EditorController | None = None):
         self.settings = settings
         self.controller = controller or EditorController(settings)
@@ -115,6 +119,9 @@ class StudioApp(ProductUI):
         self._renderer_cls = None
         self.layout_reset_requested = False
         self.init_product()
+        self.init_drive_preview()
+        self.init_authoring()
+        self.studio_version = __version__
         self.controller.history_listener = self.after_history
 
     # -- lifecycle -----------------------------------------------------------------
@@ -155,6 +162,7 @@ class StudioApp(ProductUI):
             self.renderer.unload()
             self.renderer.library = c.library
             self.renderer.textures.clear()
+        self.renderer.marker_model = self.marker_models
         prefs = self.settings.preferences
         cache = ThumbnailCache(self.settings.thumbnail_directory, prefs.thumbnail_cache_mib * 1024 * 1024)
         if self.thumbnails:
@@ -301,7 +309,8 @@ class StudioApp(ProductUI):
         if imgui.begin_menu("View"):
             for layer, label in (("geometry", "Models and terrain"), ("collision", "Collision"), ("markers", "Gameplay objects"),
                                  ("navigation", "Navigation"), ("bounds", "Map bounds"), ("minimap", "Minimap area"),
-                                 ("unresolved", "Unresolved records"), ("grid", "Grid")):
+                                 ("unresolved", "Unresolved records"), ("grid", "Grid"),
+                                 ("record_models", "Models of game records (placement inferred)")):
                 changed, value = imgui.menu_item(label, "", prefs.layers.get(layer, True))
                 if changed:
                     prefs.layers[layer] = value
@@ -359,6 +368,15 @@ class StudioApp(ProductUI):
                 imgui.same_line()
             imgui.new_line()
             imgui.separator()
+            if imgui.menu_item("Drive Preview (editor approximation)", "F5", self.drive is not None, c.document is not None)[0]:
+                self.stop_drive_preview() if self.drive is not None else self.start_drive_preview()
+            if imgui.menu_item("Test in Game...", "", False, c.project is not None and self.runtime_state()[0] is not None)[0]:
+                self.open_test_in_game()
+            imgui.separator()
+            if imgui.menu_item("Scenario editor...", "", self.show_scenarios, c.project is not None)[0]:
+                self.open_scenarios()
+            if imgui.menu_item("Items and pickups...", "", self.show_items, c.project is not None)[0]:
+                self.show_items = True
             if imgui.menu_item("Gameplay editor...", "", False, c.project is not None)[0]:
                 self.show_gameplay = True
             if imgui.menu_item("Controls and camera...", "", False)[0]:
@@ -757,6 +775,21 @@ class StudioApp(ProductUI):
         self.renderer.layers = {**prefs.layers}
         self.renderer.user_hidden = set(c.document.hidden)
         selection = set(c.document.selection)
+        if self.drive is not None:
+            if self.drive.scene is not c.document.scene:  # the map changed under the preview
+                self.stop_drive_preview()
+            else:
+                self.drive_frame(True)
+        if self.drive is not None:  # drawing the Drive Preview: no selection outlines or placement preview
+            texture = self.renderer.render(c.camera, width, height, set(), None)
+            origin = imgui.get_cursor_screen_pos()
+            self.viewport_origin = (origin.x, origin.y)
+            imgui.image(imgui.ImTextureRef(texture), imgui.ImVec2(width, height), imgui.ImVec2(0, 1), imgui.ImVec2(1, 0))
+            self.anchor("viewport")
+            self.drive_overlay((origin.x, origin.y))
+            return
+        if imgui.is_key_pressed(imgui.Key.f5, False) and not imgui.get_io().want_text_input:
+            self.start_drive_preview()
         texture = self.renderer.render(c.camera, width, height, selection, c.preview)
         origin = imgui.get_cursor_screen_pos()
         self.viewport_origin = (origin.x, origin.y)
@@ -924,7 +957,8 @@ class StudioApp(ProductUI):
             return
         family, record = doc.scene.record(doc.selection[0])
         model = insp.describe(record, family)
-        self.draw_inspector(model)
+        handled = self.authoring_inspector(record) if family == "markers" else set()
+        self.draw_inspector(model, handled)
         if family == "instances" and record.get("scale"):
             imgui.text(f"Scale: {record['scale']}")
         if record.get("disabled"):
@@ -932,7 +966,7 @@ class StudioApp(ProductUI):
             if imgui.button("Enable"):
                 c.run("enable", doc.enable, record["id"])
 
-    def draw_inspector(self, model: insp.Inspector) -> None:
+    def draw_inspector(self, model: insp.Inspector, skip=()) -> None:
         c = self.controller
         imgui.text(model.title)
         if model.record_id:
@@ -942,6 +976,8 @@ class StudioApp(ProductUI):
         if model.read_only_reason:
             imgui.text_colored(imgui.ImVec4(1, 0.6, 0.3, 1), f"Read-only: {model.read_only_reason}")
         for control in model.controls:
+            if control.name in skip:
+                continue
             key = f"{model.record_id}:{control.name}"
             imgui.begin_disabled(not control.editable)
             if control.kind == "position":
@@ -1026,9 +1062,18 @@ class StudioApp(ProductUI):
                     self.pending_values.pop(key, None)
                     self.commit_field(model.record_id, control, text)
             elif control.kind == "reference":
-                imgui.text(f"{control.label}: {self.reference_name(control.value)}")
+                resolved = None
+                if model.record_id and c.document is not None and c.document.scene.record(model.record_id):
+                    record = c.document.record(model.record_id)
+                    resolved = next((d.get("id") for d in record.get("dependencies", []) if d.get("field") == control.name and d.get("id")), None)
+                if resolved:
+                    imgui.text(f"{control.label}: {self.reference_name(resolved)} (table entry {control.value})")
+                elif str(control.value) in (control.options or {}):
+                    imgui.text(f"{control.label}: {control.options[str(control.value)]}")
+                else:
+                    imgui.text(f"{control.label}: {self.reference_name(control.value)}")
                 if imgui.is_item_hovered():
-                    imgui.set_tooltip(f"{control.value}\n{control.reason or ''}".strip())
+                    imgui.set_tooltip(f"{resolved or control.value}\n{control.reason or ''}".strip())
             else:
                 imgui.text(f"{control.label}: {control.value}")
             imgui.end_disabled()
@@ -1057,10 +1102,17 @@ class StudioApp(ProductUI):
             return "none"
         model = c.library._models.get(value) if c.library is not None else None
         if model is not None:
-            return str((model.get("source") or {}).get("label") or model.get("name") or model.get("label") or "model")
+            from tools.btga_studio.core import game_models
+
+            if value in game_models.BY_ID:
+                return game_models.BY_ID[value]["label"]
+            label = (model.get("source") or {}).get("label") or model.get("name") or model.get("label")
+            return str(label) if label else f"{model.get('library') or 'level'} model {str(value).rsplit(':', 1)[-1][:8]}"
         entry = c.document.scene.record(value) if c.document is not None else None
         if entry is not None:
             family, record = entry
+            if family == "markers":
+                return self.record_label(record)
             return f"{str(record.get('category', family)).replace('_', ' ')} {value.rsplit(':', 1)[-1]}"
         if isinstance(value, str) and value.count(":") >= 2:
             return f"missing object {value.rsplit(':', 1)[-1]}"
@@ -1406,6 +1458,10 @@ class StudioApp(ProductUI):
         self.window_new_map()
         self.window_source_manager()
         self.window_import()
+        self.window_drive_settings()
+        self.window_scenarios()
+        self.window_items()
+        self.window_test_in_game()
         self.window_hub()
         self.window_wizard()
         self.window_gameplay()
@@ -1598,7 +1654,7 @@ def main(argv: list[str] | None = None) -> int:
     settings = Settings.open(args.portable)
     app = StudioApp(settings, args.catalog, args.project)
     try:
-        immapp.run(runner_params(app), add_ons_params=immapp.AddOnsParams(with_im_guizmo=True) if hasattr(immapp, "AddOnsParams") else None)
+        immapp.run(runner_params(app))  # ImGuizmo is built into imgui-bundle 1.92; no add-on switch is needed
     except Exception:
         settings.directory.mkdir(parents=True, exist_ok=True)
         (settings.directory / "crash.log").write_text(traceback.format_exc(), encoding="utf-8")

@@ -31,6 +31,7 @@ game data; the downloaded data stays in the folders you name.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -42,6 +43,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+from tools.btga_studio import __version__ as STUDIO_VERSION
 
 CENTRE = (44.97793, -93.26941)  # map centre: between the IDS Center and the Mississippi
 BOX = (44.9595, -93.2954, 44.9964, -93.2434)  # south, west, north, east of the 4 km map
@@ -60,7 +63,7 @@ VARIANTS = {
                         "spacing": 16.0, "fine_radius": None},
 }
 IDS_FROM_CENTRE = (-200.0, -200.0)  # metres east, north of CENTRE
-USER_AGENT = "BattleTanxStudio/0.2 (map data import)"
+USER_AGENT = f"BattleTanxStudio/{STUDIO_VERSION} (map data import)"
 SKY_CREDIT = ("Horizon computed by BattleTanx Studio from OpenStreetMap (ODbL), Wikidata (CC0) and Terrain Tiles (USGS 3DEP); "
               "ramp made for this map")
 
@@ -338,6 +341,10 @@ def build(sources: Path, output: Path, capture: bool = True, variant: str = "ful
 
         # 1. a new project with an empty map
         c.new_studio_project(title)
+        # A fixed project ID derived from what is built, so two builds of the same variant from the same data are byte-identical
+        # (Studio gives projects made in its wizard a random ID).
+        c.project.project["id"] = hashlib.sha256(json.dumps({"map": "minneapolis", "variant": variant, "centre": centre, "half_m": half_m},
+                                                            sort_keys=True).encode()).hexdigest()[:16]
         c.project.project["description"] = (f"Downtown Minneapolis at true scale ({2 * half_m / 1000:.1f} km across, {setup['detail']} detail): the IDS Center, Nicollet Mall and the skyways, "
                                             "the Mississippi at St. Anthony Falls, the Stone Arch Bridge, Target Field and US Bank Stadium.")
         if ui:
@@ -453,7 +460,7 @@ def build(sources: Path, output: Path, capture: bool = True, variant: str = "ful
             if name in places:
                 doc.place_marker(templates["pickup"], world(*places[name], 0.2), 0, values={"pickup_type": kind, "respawn_seconds": 30})
         bridge = street_line(data, projection, "Stone Arch Bridge", bridges=True)
-        nodes = []
+        nodes, chains = [], []
         for street_name in ("Hennepin Avenue", "Nicollet Mall", "Washington Avenue South", "South 5th Street", "Chicago Avenue",
                             "North 5th Street"):
             line = street_line(data, projection, street_name)
@@ -462,6 +469,25 @@ def build(sources: Path, output: Path, capture: bool = True, variant: str = "ful
             for first, second in zip(chain[:-1], chain[1:]):
                 doc.set_field(first, "link_0", second)
             nodes += [(node, p) for node, p in zip(chain, points)]
+            chains.append(list(zip(chain, points)))
+
+        def free_link(node_id):
+            fields = doc.record(node_id)["fields"]
+            return next((f"link_{i}" for i in range(4) if not fields[f"link_{i}"]["value"]), None)
+
+        def link(a, b):
+            slot = free_link(a) or free_link(b)
+            if slot is None:
+                return False
+            doc.set_field(a, slot, b) if free_link(a) else doc.set_field(b, slot, a)
+            return True
+
+        for position, first in enumerate(chains):  # streets that cross are joined where their nodes come closest
+            for second in chains[position + 1:]:
+                if first and second:
+                    a, b = min(((x, y) for x in first for y in second), key=lambda pair: math.dist(pair[0][1], pair[1][1]))
+                    if math.dist(a[1], b[1]) < 300.0:
+                        link(a[0], b[0])
         for marker in start_ids:  # a node at each start, linked to the nearest street node
             record = doc.record(marker)
             position = (record["translation"][0] / S, -record["translation"][2] / S)
@@ -469,6 +495,16 @@ def build(sources: Path, output: Path, capture: bool = True, variant: str = "ful
             start_node = doc.place_marker(templates["nav_node"], world(position[0] + 12.0, position[1], 0.2), 0)
             doc.set_field(start_node, "link_0", nearest_node)
             nodes.append((start_node, position))
+        from tools.btga_studio.core.navgraph import NavGraph
+
+        graph = NavGraph.from_scene(doc.scene)  # real streets all meet: join any piece still apart to the main network
+        parts = sorted(graph.components(), key=lambda part: (-len(part), min(part)))
+        main = set(parts[0]) if parts else set()
+        for part in parts[1:]:
+            a, b = min(((x, y) for x in sorted(part) for y in sorted(main)), key=lambda pair: math.dist(graph.nodes[pair[0]], graph.nodes[pair[1]]))
+            link(a, b)
+            main |= part
+        note(f"navigation: {len(parts)} street piece(s) joined into one network")
         bridge = [p for p in bridge if inside(p)]
         if bridge:
             doc.place_marker(templates["pickup"], world(*bridge[len(bridge) // 2], 6.0), 0, values={"pickup_type": 3, "respawn_seconds": 30})
@@ -553,7 +589,7 @@ def build(sources: Path, output: Path, capture: bool = True, variant: str = "ful
         c.save(project_path)
         package_path = output / "Minneapolis.btgapkg"
         note("exporting the content package")
-        data_bytes = package.build_package(c.project, c.library, "0.2.0")
+        data_bytes = package.build_package(c.project, c.library, STUDIO_VERSION)
         package_path.write_bytes(data_bytes)
         checked = package.read_package(data_bytes)
         app.export_result = {"name": package_path.name, "path": str(package_path), "size": len(data_bytes), "maps": len(checked.maps)}

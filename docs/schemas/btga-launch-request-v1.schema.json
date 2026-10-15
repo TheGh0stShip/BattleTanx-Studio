@@ -1,0 +1,42 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "btga-launch-request-v1",
+ "title": "BattleTanx Studio launch request, version 1",
+ "description": "Written once, as UTF-8 JSON, to the runtime's standard input when Studio starts it with the argument '--btga-launch-request -'. Never written to disk or into a project. Reference validator: tools/btga_studio/core/runtime.py validate_request.",
+ "type": "object",
+ "required": ["schema", "schema_version", "session_id", "package", "map", "scenario", "player_spawn", "bot_slots", "capture", "rom", "studio", "features"],
+ "additionalProperties": true,
+ "properties": {
+  "schema": {"const": "btga-launch-request"},
+  "schema_version": {"const": 1},
+  "session_id": {"type": "string", "pattern": "^[0-9a-f]{32}$", "description": "Random per launch; the runtime should tag its logs and captures with it."},
+  "package": {
+   "type": "object", "required": ["path", "sha256", "size"],
+   "properties": {
+    "path": {"type": "string", "description": "Absolute path of the .btgapkg Studio exported."},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "SHA-256 of the package bytes; the runtime must refuse a mismatch."},
+    "size": {"type": "integer", "minimum": 0}
+   }
+  },
+  "map": {"type": "string", "minLength": 1, "description": "Map key inside the package (maps/<key>.json)."},
+  "scenario": {"type": ["string", "null"], "description": "Scenario key in project.json scenarios, or null for free play."},
+  "player_spawn": {"type": ["string", "null"], "description": "Record ID of a player_spawn / team_start record, or null for the runtime's choice."},
+  "bot_slots": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 0, "maximum": 63}, "description": "AI slots (bot_slot records' ai_slot) to populate."},
+  "capture": {
+   "type": "object", "required": ["mode", "directory"],
+   "properties": {
+    "mode": {"enum": ["none", "screenshot", "video"]},
+    "directory": {"type": ["string", "null"], "description": "Absolute directory for captures; required unless mode is none."}
+   }
+  },
+  "rom": {
+   "type": "object", "required": ["path", "sha256"],
+   "properties": {
+    "path": {"type": "string", "description": "Absolute path of the user's cartridge, from Studio's local settings only."},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "SHA-256 in big-endian (.z64) byte order."}
+   }
+  },
+  "studio": {"type": "object", "required": ["version"], "properties": {"version": {"type": "string"}}},
+  "features": {"type": "array", "items": {"type": "string"}, "description": "Every runtime feature the package content uses (docs/RUNTIME_FEATURES.md)."}
+ }
+}

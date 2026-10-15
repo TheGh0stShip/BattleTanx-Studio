@@ -364,7 +364,7 @@ class ProjectTests(unittest.TestCase):
             text = first.read_text()
             self.assertNotIn(temp, text)
             self.assertNotIn("time", json.loads(text))
-            self.assertEqual(json.loads(text)["schema_version"], 2)
+            self.assertEqual(json.loads(text)["schema_version"], 3)
             self.assertEqual(reloaded.record("n64_btga:marker:spawner")["fields"]["spawn_budget"]["value"], 3)
             self.assertFalse(reloaded.dirty)
             self.assertEqual(reloaded.record("n64_btga:marker:spawner")["source"], {"synthetic": True})

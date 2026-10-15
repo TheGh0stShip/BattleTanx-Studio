@@ -127,21 +127,28 @@ class JobRunner:
         return self.submit(job.label, job.work, job.kind, job.on_done)
 
     def _run(self, job: Job) -> None:
+        terminal_state = "cancelled"
         if job.cancel_event.is_set():
-            job.state = "cancelled"
+            pass
         else:
             job.state, job.started = "running", time.monotonic()
             try:
                 job.result = job.work(JobContext(job))
-                job.state = "done"
+                terminal_state = "done"
             except Cancelled:
-                job.state = "cancelled"
+                terminal_state = "cancelled"
             except Exception as error:  # reported to the user by the UI thread
-                job.state, job.error = "failed", _plain(error)
+                job.error = _plain(error)
                 job.detail = traceback.format_exc()
-        job.finished_at = time.monotonic()
+                terminal_state = "failed"
+        # Publish completion only after every result/error field is ready and the
+        # job is queued for its UI-thread callback.  ``active`` uses ``state`` as
+        # its completion barrier, so setting a terminal state any earlier lets a
+        # waiter race ahead and observe partial data or miss the callback.
         with self._lock:
+            job.finished_at = time.monotonic()
             self._finished.append(job)
+            job.state = terminal_state
 
     def poll(self) -> list[Job]:
         """Jobs finished since the last call; runs their ``on_done`` callbacks on the calling (UI) thread."""
