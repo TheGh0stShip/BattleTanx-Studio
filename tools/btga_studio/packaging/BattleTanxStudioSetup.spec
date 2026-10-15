@@ -9,6 +9,11 @@ ROOT = Path(SPECPATH).resolve().parents[2]
 PREP = Path(os.environ["BTGA_RELEASE_PREP"])
 PAYLOAD = Path(os.environ["BTGA_SETUP_PAYLOAD"])
 datas, binaries, hidden = collect_all("imgui_bundle")
+_skip_paths = ("/demos_", "/demos/", "/sandbox/", "/playground/", "/notebooks/")
+_skip_modules = (".demos_", ".demos.", ".sandbox.", ".playground.", ".notebooks", ".imgui_terminal", ".imgui_pydantic")
+datas = [entry for entry in datas if not any(marker in (str(entry[0]) + "/" + str(entry[1])).replace("\\", "/").lower()
+                                                for marker in _skip_paths)]
+hidden = [name for name in hidden if not any(marker in name.lower() for marker in _skip_modules)]
 datas += [(str(PAYLOAD), "payload"), (str(PREP / "data" / "fonts"), "data/fonts")]
 hidden += ["OpenGL.platform.win32"]
 

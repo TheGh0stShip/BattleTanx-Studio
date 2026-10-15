@@ -8,6 +8,15 @@ from PyInstaller.utils.hooks import collect_all
 ROOT = Path(SPECPATH).resolve().parents[2]
 PREP = Path(os.environ["BTGA_RELEASE_PREP"])
 datas, binaries, hidden = collect_all("imgui_bundle")
+# collect_all also returns the dependency's example applications, source trees,
+# notebooks and optional terminal integration.  Studio uses none of them; keeping
+# them bloats the release, triggers irrelevant optional-dependency warnings and
+# can leak unrelated demo text into the product audit.
+_skip_paths = ("/demos_", "/demos/", "/sandbox/", "/playground/", "/notebooks/")
+_skip_modules = (".demos_", ".demos.", ".sandbox.", ".playground.", ".notebooks", ".imgui_terminal", ".imgui_pydantic")
+datas = [entry for entry in datas if not any(marker in (str(entry[0]) + "/" + str(entry[1])).replace("\\", "/").lower()
+                                                for marker in _skip_paths)]
+hidden = [name for name in hidden if not any(marker in name.lower() for marker in _skip_modules)]
 hidden += ["OpenGL.platform.win32", "OpenGL.arrays.numpymodule", "OpenGL.arrays.ctypesarrays", "OpenGL.arrays.numbers"]
 datas += [
     (str(ROOT / "src/code/frontend/800E8380_slot_asset_ranges.c"), "data"),  # Global Assault level table, needed to build N64 catalogs
