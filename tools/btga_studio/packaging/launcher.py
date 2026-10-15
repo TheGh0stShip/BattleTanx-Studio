@@ -1,4 +1,4 @@
-"""Frozen entry point for BTGAStudio.exe."""
+"""Frozen entry point for BattleTanxStudio.exe."""
 
 import multiprocessing
 import sys

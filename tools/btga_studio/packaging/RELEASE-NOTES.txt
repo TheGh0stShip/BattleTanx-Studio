@@ -1,0 +1,24 @@
+BattleTanx Studio {version}
+===========================
+
+What is in this release
+- BattleTanxStudioSetup.exe: installs BattleTanx Studio for your Windows user account
+  (no administrator rights), with a Start menu entry, an optional desktop shortcut and
+  an entry in Windows Settings > Apps for removal. Running it again repairs or upgrades.
+- BattleTanxStudio-portable-x64.zip: the same program as a folder you can unzip and run
+  without installing.
+- SHA256SUMS.txt and build-manifest.json: checksums and build details.
+
+Highlights
+- Welcome screen, Project Hub, guided tour and built-in help.
+- Gameplay editor for maps, spawns, pickups, objectives, navigation, missions, campaigns,
+  multiplayer, minigames, tanks, gangs, minimaps and prefabs, all with undo and redo.
+- Source Manager for adding your own copies of BattleTanx games.
+- Project and file names in Greek, Cyrillic, Chinese, Japanese and Korean display correctly.
+
+Good to know
+- No game data is included. Your own game files are read on your computer only.
+- The programs are not digitally signed. Windows SmartScreen may warn before they run;
+  choose "More info" and "Run anyway" only if you downloaded them from the official
+  Releases page and the checksums match SHA256SUMS.txt.
+- Upgrading and uninstalling keep your projects, settings and catalogs.

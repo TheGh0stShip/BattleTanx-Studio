@@ -12,7 +12,18 @@ map semantics, non-destructive edit overlays, glTF export, comparison tools,
 and synthetic tests. It does **not** contain ROMs, disc images, extracted game
 assets, or generated previews. Supply game data you legally control locally.
 
-## Quick start
+## For players and map makers (Windows)
+
+Download `BattleTanxStudioSetup.exe` from the Releases page and run it. The
+per-user installer needs no administrator access and adds normal Start menu and
+Windows Settings entries. A portable `BattleTanxStudio-portable-x64.zip` is
+also available. Neither option needs Python, a terminal, or game files. The
+welcome screen offers **Create Original Project**, **Import From My Games**,
+**Open Existing Project** and **Open Example Project**; press F1 for help.
+`README.txt` in the download explains installation, storage locations, and
+problem reporting.
+
+## For developers
 
 Python 3.11 or newer is recommended.
 

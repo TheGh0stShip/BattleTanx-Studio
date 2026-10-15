@@ -13,7 +13,7 @@ Every edit is stored as a non-destructive project overlay over the source record
 |---|---|
 | Python 3 + **imgui-bundle** (Dear ImGui with docking, **ImGuizmo**, hello_imgui on GLFW) | Reuses the existing tested Studio core (`tools/btga_assets`: overlays, typed fields, validation) instead of re-implementing it. ImGuizmo is a mature gizmo, and pinned wheels exist for Windows x64 and Linux. |
 | PyOpenGL (OpenGL 3.3 core) + numpy | Draws neutral meshes directly; vectorised picking and baking |
-| PyInstaller | Freezes a windowed `BTGAStudio.exe` (no console) with every runtime library |
+| PyInstaller | Freezes a windowed `BattleTanxStudio.exe` (no console) with every runtime library |
 | Mesa EGL (surfaceless) | Tests and screenshots drive the real UI off-screen; no window is ever created |
 
 **Alternatives rejected:**
@@ -30,11 +30,12 @@ python -m pip install -r tools/btga_studio/requirements.txt
 python -m tools.btga_studio --catalog local-data/catalog
 ```
 
-On Windows, start `BTGAStudio.exe`.
+On Windows, start `BattleTanxStudio.exe`. A first launch shows the welcome screen (Create Original Project, Import From My Games, Open Existing Project, Open Example Project); File > Project Hub shows it again with recent projects.
 
 **Settings:**
-- Stored in `%APPDATA%\BTGAStudio` (Windows) or `~/.config/btga-studio` (Linux): `preferences.json`, `layout.ini`, `thumbnails/`, `recovery/`.
-- **Portable mode:** `--portable`, or a `portable.txt` next to the executable, keeps settings in `BTGAStudioData\`.
+- `%APPDATA%\BattleTanx Studio` holds `preferences.json`, `layout.ini` and `sources.json`; `%LOCALAPPDATA%\BattleTanx Studio` holds `catalogs/`, `thumbnails/`, `starter/`, `recovery/`, `logs/` and `prefabs/` (Linux: `$XDG_CONFIG_HOME/battletanx-studio` and `$XDG_DATA_HOME/battletanx-studio`). Nothing is written next to the program.
+- Data from earlier builds in `%APPDATA%\BTGAStudio` is migrated once (preferences and source registry; catalogs are rebuilt on demand).
+- **Portable mode:** `--portable`, or a `portable.txt` next to the executable, keeps everything in `BattleTanxStudioData\`.
 - `BTGA_STUDIO_HOME` overrides the location; tests always set it.
 - Settings and layout are never written into a project.
 
@@ -164,19 +165,53 @@ No shortcut fires while a text field has focus (`gui/input.py`, tested).
   - GPU thumbnails: 512.
   - Disk thumbnails: 64 MiB (configurable).
 
+## Product modules
+
+| Module | Role | Consumers |
+|---|---|---|
+| `core/atomic.py` | Atomic file replacement (temporary file in the same folder, fsync, `os.replace`; cleanup on failure) | project save, autosave, source registry, preferences, package export, prefabs, release tooling |
+| `core/jobs.py` | Background jobs with progress, cancellation, bounded queue (16), retry; callbacks run on the UI thread | source identify/register/verify/search/relink, catalog builds, package export, per-user install |
+| `core/applog.py` | JSON-lines logs (rotated, 1 MiB x 5) with absolute paths removed; problem reports | controller, error dialogs, Help > Report a problem |
+| `core/hub.py` | Templates, project creation, recent-project status with missing dependencies, relink, duplicate, rename | Project Hub, wizard, tests |
+| `core/prefabs.py` | Named reusable object groups stored per user | gameplay editor, context menus |
+| `core/installer.py` | Transactional per-user install, upgrade, repair, downgrade policy, rollback journal, uninstall that keeps user data; platform effects behind `WindowsSystem` / `SandboxSystem` adapters | `BattleTanxStudioSetup.exe`, Settings, `--uninstall`, installer audit |
+| `core/versioning.py` | Version parsing and ordering (pre-releases sort first) | installer, release tooling |
+| `core/environment.py` | Installed / portable / source detection, build revision, repair guidance | About, Settings |
+| `core/history.py` | Undo/redo for gameplay definitions, map and minimap settings and prefab files; coalescing; shared sequence with map edits | Gameplay editor, toolbar, Edit menu |
+| `core/tutorial.py` | Guided-tour steps, completion checks against editor facts, per-user progress | welcome screen, Help |
+| `core/fontset.py`, `gui/fonts.py` | Bundled font manifest, SHA-256 verification, staging for builds, Dear ImGui loading with merged fallbacks | editor, setup, release tooling |
+| `setup/` | Setup pages and uninstall confirmation (window-independent), `BattleTanxStudioSetup.exe` entry point | release |
+| `core/desktop.py` | Open a folder or an allow-listed project URL without a console | settings, help, export, error dialogs |
+| `gui/windows.py` | Welcome/Hub, wizard, Source Manager, gameplay editor, settings, about, help, dialogs, toolbar, status bar, context menus | `StudioApp` |
+| `fixtures.py` | Synthetic ROMs, temporary supported revisions, simulated catalog builder, scripted dialogs | tests, screenshot capture |
+| `packaging/release.py` | Version resource, build information, third-party notices, deterministic ZIP, checksums, build manifest | `build_windows.ps1` |
+
+Every panel and window runs inside `StudioApp.guard`: an unexpected exception is logged with its traceback, Dear ImGui's error recovery repairs the frame, and the user sees one plain-language dialog instead of the editor closing. File pickers go through `StudioApp.dialogs`, so the off-screen tests drive every window.
+
+## Undo for gameplay definitions
+
+Map-object edits keep their per-map stacks; gameplay definitions (project name and description, campaigns, missions, multiplayer, minigames, tanks, gangs), map name, size and sky colour, minimap settings and prefab files go through `core/history.py`. One user action is one transaction; typing in one text box or dragging one slider coalesces until the control loses focus (or 2 s pass); an edit that raises is rolled back and never recorded; an edit that changes nothing is not recorded. Every transaction, in either history, takes a number from one shared sequence, so Ctrl+Z reverses the most recent action wherever it happened and restores the Gameplay editor tab and map it came from. Saved projects store both histories with their sequence numbers replaced by ranks, so serialisation stays deterministic. The unsaved-changes state compares project content only, so undoing back to the saved state is clean.
+
+## Fonts
+
+`tools/btga_studio/fonts/fonts.json` lists the bundled fonts (DejaVu Sans for Latin, Greek and Cyrillic; Droid Sans Fallback for Chinese and Japanese; Nanum Gothic for Korean) with version, licence, provenance, pinned Ubuntu package URL and package/font SHA-256; the licence texts sit beside it. The font files are not in the repository. On Linux/WSL, `python tools/fetch_studio_fonts.py private-work/toolchains/fonts` downloads the pinned packages over HTTPS, verifies them before extraction with `dpkg-deb`, verifies the extracted fonts, and installs nothing system-wide. Point `BTGA_STUDIO_FONT_DIR` (or `build_windows.ps1 -FontDir`) at that folder. A file whose hash differs is never used; without the primary font Studio falls back to Dear ImGui's built-in font and logs it.
+
 ## Acceptance tooling
 
 | Tool | Inputs | Outputs | Notes |
 |---|---|---|---|
 | `gui/offscreen.py` (`OffscreenUI`) | a `StudioApp` | frames, `click`/`drag`/`press` through Dear ImGui IO, `world_to_screen`, `pixels`, `screenshot` | EGL surfaceless; never creates a window; screenshots are the application framebuffer only |
 | `tools/studio_evidence.py` | a checkout, PNG files, directories | source identity (commit plus SHA-256 of uncommitted changes), `stale`, conflicting processes (`/proc`), image statistics and blank/flat rejection, adjacent JSON evidence records, file manifests and their comparison | git is used read-only; records contain no absolute paths; hashing is streamed |
-| `tools/capture_studio_acceptance.py OUT [--review VERDICTS]` | starter content only | 18 application screenshots with JSON records; `--review` merges reviewer verdicts and moves failures to `rejected/` | automatic checks reject blank or flat images, human review is still required |
+| `tools/capture_studio_acceptance.py`, `tools/capture_studio_product.py`, `tools/capture_studio_release.py` (each `OUT [--review VERDICTS]`) | starter content only | 18 application screenshots with JSON records; `--review` merges reviewer verdicts and moves failures to `rejected/` | automatic checks reject blank or flat images, human review is still required |
 | `tools/audit_studio_package.py DIST [--manifest M] [--forbid TEXT]`, `--compare A B` | a packaged folder | PE subsystem, required files, forbidden file types, forbidden text (ASCII and UTF-16LE), manifest; differing files between two builds | constant memory (4 MiB scan windows) |
 | `tools/benchmark_studio_cycles.py [--cycles N]` | starter content | open/edit/undo/validate latency, per-cycle RSS and traced heap, second-half spread | samples are preallocated so the probe does not measure itself |
 
 ## Windows build
 
-`tools/btga_studio/packaging/build_windows.ps1` creates an isolated venv with Python 3.13 (`-PythonVersion`; `py -3` would pick the newest installed interpreter), installs the pinned requirements, freezes `BTGAStudio.exe` with PyInstaller (windowed), adds the synthetic sample catalog and project and the ROM-free starter example (`samples/starter-example.btgaproj`), and zips the folder.
-- **Self-check:** `BTGAStudio.exe --self-check REPORT.json` exercises the starter workflow without a window and, when frozen, verifies that the shipped starter example equals a fresh build of it.
+`tools/btga_studio/packaging/build_windows.ps1` creates an isolated venv with Python 3.13 (`-PythonVersion`; `py -3` would pick the newest installed interpreter), installs the pinned requirements, writes the Windows version resource and `data/build.json` (`release.py prepare`), freezes `BattleTanxStudio.exe` with PyInstaller (windowed; the Global Assault level table is bundled as data so N64 catalogs build in the packaged program), adds the synthetic sample, the ROM-free starter example, `README.txt`, `COPYING.txt` and `THIRD-PARTY-NOTICES.txt`, and writes `release/` with a deterministic ZIP, `SHA256SUMS.txt` and `build-manifest.json` (`release.py finalize`).
+- **Self-check:** `BattleTanxStudio.exe --self-check REPORT.json` exercises the starter workflow without a window and, when frozen, verifies the bundled data files and that the shipped starter example equals a fresh build of it.
+- **Setup:** the build also freezes `BattleTanxStudioSetup.exe` (one file, Windows GUI subsystem, version resource with publisher) that embeds the program folder and its `payload-manifest.json`. It installs per user (default `%LOCALAPPDATA%\Programs\BattleTanx Studio`, selectable), adds a Start menu entry and an optional desktop shortcut, registers an HKCU uninstall entry with a stable upgrade code, upgrades and repairs in place, refuses downgrades unless confirmed, and rolls every step back on failure. `--silent`, `--self-check` and (tests only) `--sandbox` are available. Windows Settings > Apps runs `BattleTanxStudio.exe --uninstall`, which keeps projects, settings and catalogs unless the user ticks the removal option. Tools > Settings > Install for this user does the same from a portable copy. Builds are not signed.
+- **Release folder:** exactly `BattleTanxStudioSetup.exe`, `BattleTanxStudio-portable-x64.zip`, `SHA256SUMS.txt`, `build-manifest.json`, `RELEASE-NOTES.txt`, `THIRD-PARTY-NOTICES.txt` and `README.txt`; `release.py finalize` refuses anything else.
+- **Checks:** `tools/audit_studio_installer.py` (metadata, payload hashes, upgrade-code stability, registration, shortcuts, quoting, rollback at every step, repair, uninstall preservation, all in a sandbox) and `tools/windows_release_check.py` (the same on the real Windows filesystem through the setup's silent sandbox mode, plus read-only folders and running-program detection).
 - **Run it** with `powershell -WindowStyle Hidden -NonInteractive`. It never launches the editor.
 - **Outputs** go outside the repository.
