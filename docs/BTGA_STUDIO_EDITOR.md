@@ -174,6 +174,12 @@ No shortcut fires while a text field has focus (`gui/input.py`, tested).
 | `core/applog.py` | JSON-lines logs (rotated, 1 MiB x 5) with absolute paths removed; problem reports | controller, error dialogs, Help > Report a problem |
 | `core/hub.py` | Templates, project creation, recent-project status with missing dependencies, relink, duplicate, rename | Project Hub, wizard, tests |
 | `core/prefabs.py` | Named reusable object groups stored per user | gameplay editor, context menus |
+| `core/imaging.py` | PNG (all colour types, Adam7), baseline JPEG, BMP and TGA decoding; power-of-two fitting | importers, elevation tiles |
+| `core/imports.py` | OBJ/MTL, glTF 2.0/GLB and picture import (texture, ground tile, upright panel, box, sky panorama); the user library catalog (`user:` IDs) with credits; restore from packages | Import window, city builder, packages |
+| `core/sky.py` | Sky panorama record checks and the sphere the viewport draws | renderer, Map tab, packages |
+| `core/geo.py` | WGS84 local projection, Terrarium elevation tiles, polygon triangulation with holes, minimum rectangles, raster painting | city builder, skyline |
+| `core/osm.py` | OpenStreetMap (`.osm` or Overpass JSON) to a true-scale city: terrain, painted ground, buildings and parts with real heights (Wikidata fill-in), open stadium bowls, bridges, skyways, trees, collision | Import window (Build a city), map scripts |
+| `core/skyline.py` | A sky panorama of the real horizon: terrain to 45 km plus distant buildings, domes and masts at true bearings | map scripts |
 | `core/installer.py` | Transactional per-user install, upgrade, repair, downgrade policy, rollback journal, uninstall that keeps user data; platform effects behind `WindowsSystem` / `SandboxSystem` adapters | `BattleTanxStudioSetup.exe`, Settings, `--uninstall`, installer audit |
 | `core/versioning.py` | Version parsing and ordering (pre-releases sort first) | installer, release tooling |
 | `core/environment.py` | Installed / portable / source detection, build revision, repair guidance | About, Settings |
@@ -188,9 +194,15 @@ No shortcut fires while a text field has focus (`gui/input.py`, tested).
 
 Every panel and window runs inside `StudioApp.guard`: an unexpected exception is logged with its traceback, Dear ImGui's error recovery repairs the frame, and the user sees one plain-language dialog instead of the editor closing. File pickers go through `StudioApp.dialogs`, so the off-screen tests drive every window.
 
+## Importing models, pictures and real places
+
+File > Import models and textures (or Import... above the asset browser) reads OBJ (with MTL and pictures), glTF/GLB and PNG/JPEG/BMP/TGA files from anywhere. Each file is checked with the chosen options before anything is stored (units, up axis, standing on the ground, largest texture, what a picture becomes); problems are listed per file in plain language (missing textures are looked up by name next to the model, files outside the model's folder are never read, progressive JPEGs and FBX files come with advice). Imports go into the user's library (`%LOCALAPPDATA%\BattleTanx Studio\user-library`), appear in the asset browser under "Imported: <group>", keep their credit and licence text, and travel inside content packages. A missing import shows as a magenta stand-in box and a MISSING_IMPORT validation error, never a crash. Right-click > Make solid adds a collision box matching a placed model.
+
+The same window builds a city from OpenStreetMap data (and optional Terrarium elevation tiles and a Wikidata heights result) into a new map in the background; the whole city is one undoable step. `tools/build_minneapolis_map.py` shows the full workflow, including a computed horizon sky, a teleporter ramp and multiplayer setup.
+
 ## Undo for gameplay definitions
 
-Map-object edits keep their per-map stacks; gameplay definitions (project name and description, campaigns, missions, multiplayer, minigames, tanks, gangs), map name, size and sky colour, minimap settings and prefab files go through `core/history.py`. One user action is one transaction; typing in one text box or dragging one slider coalesces until the control loses focus (or 2 s pass); an edit that raises is rolled back and never recorded; an edit that changes nothing is not recorded. Every transaction, in either history, takes a number from one shared sequence, so Ctrl+Z reverses the most recent action wherever it happened and restores the Gameplay editor tab and map it came from. Saved projects store both histories with their sequence numbers replaced by ranks, so serialisation stays deterministic. The unsaved-changes state compares project content only, so undoing back to the saved state is clean.
+Map-object edits keep their per-map stacks; gameplay definitions (project name and description, campaigns, missions, multiplayer, minigames, tanks, gangs), map name, size, sky colour and sky panorama, minimap settings and prefab files go through `core/history.py`. One user action is one transaction; typing in one text box or dragging one slider coalesces until the control loses focus (or 2 s pass); an edit that raises is rolled back and never recorded; an edit that changes nothing is not recorded. Every transaction, in either history, takes a number from one shared sequence, so Ctrl+Z reverses the most recent action wherever it happened and restores the Gameplay editor tab and map it came from. Saved projects store both histories with their sequence numbers replaced by ranks, so serialisation stays deterministic. The unsaved-changes state compares project content only, so undoing back to the saved state is clean.
 
 ## Fonts
 
