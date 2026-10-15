@@ -1,8 +1,8 @@
 """Repeated map open / edit / close cycles on ROM-free starter content: memory plateau and latency.
 
 Each cycle opens every map of the starter example through the controller,
-places, moves, duplicates, deletes and undoes objects, validates, then
-closes the map.  It reports per-cycle RSS (Linux ``/proc``; None elsewhere),
+places, moves, duplicates, deletes and undoes objects, validates, saves the
+project (atomically, to a path with spaces and non-ASCII), then closes the map.  It reports per-cycle RSS (Linux ``/proc``; None elsewhere),
 the traced Python heap after a collection, and p50/p95 latencies.  The
 heap of the second half of the run must stay within ``--tolerance-kib``.
 
@@ -52,7 +52,7 @@ def run(cycles: int) -> dict:
 
     # Samples go into preallocated arrays so the probe's own bookkeeping does not show up as heap growth.
     samples = cycles * 3
-    timings = {name: array.array("d", bytes(8 * samples)) for name in ("open", "edit", "undo", "validate")}
+    timings = {name: array.array("d", bytes(8 * samples)) for name in ("open", "edit", "undo", "validate", "save")}
     heap = array.array("q", bytes(8 * cycles))
     rss = array.array("q", bytes(8 * cycles))
     slot = 0
@@ -60,6 +60,7 @@ def run(cycles: int) -> dict:
         os.environ["BTGA_STUDIO_HOME"] = temp
         controller = EditorController(Settings.open())
         controller.project = build_example(controller.library)
+        save_path = Path(temp) / "cycle project ü.btgaproj"
         cube = controller.library.starter()["models"]["cube"]
         tracemalloc.start()
         try:
@@ -83,6 +84,9 @@ def run(cycles: int) -> dict:
                     controller.request_diagnostics(immediate=True)
                     controller.poll_diagnostics(wait=True)
                     timings["validate"][slot] = time.perf_counter() - start
+                    start = time.perf_counter()
+                    controller.save(save_path)
+                    timings["save"][slot] = time.perf_counter() - start
                     document.redo_stack.clear()
                     controller.close_map()
                     slot += 1

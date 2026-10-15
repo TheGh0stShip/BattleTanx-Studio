@@ -677,8 +677,8 @@ class SourceManagerTests(unittest.TestCase):
             text = (self.temp / "data" / "sources.json").read_text(encoding="utf-8")
             self.assertNotIn("rgba", text)
             registry.sources[source.id].catalog = "../../outside"
-            with self.assertRaisesRegex(sources.SourceError, "unsafe catalog"):
-                registry.catalog_roots()
+            self.assertEqual(registry.catalog_roots(), [])  # an unsafe name is skipped, never followed (and never crashes startup)
+            self.assertEqual(registry.catalog_state(registry.sources[source.id]), ("damaged", 0))
             outside = self.temp / "outside"
             outside.mkdir()
             with self.assertRaisesRegex(sources.SourceError, "unsafe catalog"):

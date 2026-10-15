@@ -15,6 +15,16 @@ except ImportError:  # pragma: no cover
     np = None
 
 
+def _version_block() -> bytes:
+    block = b""
+    for key, value in (("OriginalFilename", "BattleTanxStudio.exe"), ("ProductVersion", "0.2.0")):
+        entry = key.encode("utf-16-le") + b"\x00\x00"
+        entry += b"\x00" * ((-(len(block) + len(entry))) % 4)
+        block += entry + value.encode("utf-16-le") + b"\x00\x00"
+        block += b"\x00" * ((-len(block)) % 4)
+    return block
+
+
 def _pe(subsystem: int) -> bytes:
     data = bytearray(1024)
     data[:2] = b"MZ"
@@ -22,17 +32,19 @@ def _pe(subsystem: int) -> bytes:
     data[0x80:0x84] = b"PE\0\0"
     struct.pack_into("<H", data, 0x80 + 24, 0x20B)
     struct.pack_into("<H", data, 0x80 + 24 + 68, subsystem)
-    return bytes(data)
+    return bytes(data) + _version_block()
 
 
 class PackageAuditTests(unittest.TestCase):
     def _dist(self, root: Path, subsystem: int = 2) -> Path:
-        dist = root / "BTGAStudio"
-        for name in ("_internal/python313.dll", "README.txt", "samples/sample.btgaproj", "samples/sample-catalog/catalog.json",
+        dist = root / "BattleTanxStudio"
+        for name in ("_internal/python313.dll", "README.txt", "COPYING.txt", "THIRD-PARTY-NOTICES.txt", "_internal/data/build.json",
+                     "_internal/data/800E8380_slot_asset_ranges.c", "_internal/data/fonts/fonts.json", "_internal/data/fonts/DejaVuSans.ttf",
+                     "payload-manifest.json", "samples/sample.btgaproj", "samples/sample-catalog/catalog.json",
                      "samples/starter-example.btgaproj"):
             (dist / name).parent.mkdir(parents=True, exist_ok=True)
             (dist / name).write_bytes(b"neutral content")
-        (dist / "BTGAStudio.exe").write_bytes(_pe(subsystem))
+        (dist / "BattleTanxStudio.exe").write_bytes(_pe(subsystem))
         return dist
 
     def test_gui_subsystem_required_files_and_leaks(self):
@@ -40,7 +52,10 @@ class PackageAuditTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp:
             dist = self._dist(Path(temp))
-            self.assertEqual(pe_subsystem(dist / "BTGAStudio.exe"), "windows-gui")
+            self.assertEqual(pe_subsystem(dist / "BattleTanxStudio.exe"), "windows-gui")
+            from tools.audit_studio_package import version_strings
+
+            self.assertEqual(version_strings(dist / "BattleTanxStudio.exe"), {"OriginalFilename": "BattleTanxStudio.exe", "ProductVersion": "0.2.0"})
             self.assertEqual(audit(dist, ["C:\\Users\\builder"])["problems"], [])
             (dist / "_internal" / "leak.pyc").write_bytes("x C:\\USERS\\builder\\src y".encode("utf-16-le"))
             import zipfile
@@ -64,10 +79,10 @@ class PackageAuditTests(unittest.TestCase):
             )
         with tempfile.TemporaryDirectory() as temp:
             dist = self._dist(Path(temp), subsystem=3)
-            self.assertIn("BTGAStudio.exe uses the windows-console subsystem", audit(dist, [])["problems"])
-            (dist / "BTGAStudio.exe").write_bytes(b"not a program")
+            self.assertIn("BattleTanxStudio.exe uses the windows-console subsystem", audit(dist, [])["problems"])
+            (dist / "BattleTanxStudio.exe").write_bytes(b"not a program")
             with self.assertRaises(ValueError):
-                pe_subsystem(dist / "BTGAStudio.exe")
+                pe_subsystem(dist / "BattleTanxStudio.exe")
 
     def test_fragment_split_across_scan_windows_is_found(self):
         from tools import audit_studio_package as module

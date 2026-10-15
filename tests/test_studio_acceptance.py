@@ -362,9 +362,17 @@ class AcceptanceRegressionTests(unittest.TestCase):
             (program / "samples").mkdir(parents=True)
             shutil.copy(root / "examples" / "starter-example.btgaproj", program / "samples" / "starter-example.btgaproj")
             report = Path(temp) / "report.json"
-            with mock.patch.object(sys, "frozen", True, create=True), mock.patch.object(sys, "executable", str(program / "BTGAStudio.exe")):
+            bundled = Path(temp) / "bundle"
+            (bundled / "data").mkdir(parents=True)
+            for name in ("800E8380_slot_asset_ranges.c", "build.json"):
+                (bundled / "data" / name).write_text("{}", encoding="utf-8")
+            with mock.patch.object(sys, "frozen", True, create=True), mock.patch.object(sys, "executable", str(program / "BTGAStudio.exe")), \
+                    mock.patch.object(sys, "_MEIPASS", str(bundled), create=True):
                 self.assertEqual(self_check(report), 0, report.read_text(encoding="utf-8"))
                 self.assertTrue(json.loads(report.read_text(encoding="utf-8"))["steps"]["shipped_example"])
+                (bundled / "data" / "build.json").unlink()
+                self.assertEqual(self_check(report), 1)  # missing bundled data fails the packaged self-check
+                (bundled / "data" / "build.json").write_text("{}", encoding="utf-8")
                 (program / "samples" / "starter-example.btgaproj").write_text("{}", encoding="utf-8")
                 self.assertEqual(self_check(report), 1)  # a damaged or missing example fails the packaged self-check
 

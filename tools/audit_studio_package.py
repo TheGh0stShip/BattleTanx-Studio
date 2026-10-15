@@ -2,7 +2,7 @@
 
 Checks:
 
-* ``BTGAStudio.exe`` is a PE image for the Windows GUI subsystem (2), so no
+* ``BattleTanxStudio.exe`` is a PE image for the Windows GUI subsystem (2), so no
   console window opens with it;
 * required runtime files exist (the executable, the internal runtime folder,
   README, the synthetic sample and the ROM-free starter example);
@@ -38,7 +38,10 @@ if str(ROOT) not in sys.path:
 
 from tools.studio_evidence import compare_manifests, manifest  # noqa: E402
 
-REQUIRED = ("BTGAStudio.exe", "_internal", "README.txt", "samples/sample.btgaproj", "samples/sample-catalog/catalog.json",
+EXECUTABLE = "BattleTanxStudio.exe"
+REQUIRED = (EXECUTABLE, "_internal", "README.txt", "COPYING.txt", "THIRD-PARTY-NOTICES.txt", "_internal/data/build.json",
+            "_internal/data/800E8380_slot_asset_ranges.c", "_internal/data/fonts/fonts.json", "_internal/data/fonts/DejaVuSans.ttf",
+            "payload-manifest.json", "samples/sample.btgaproj", "samples/sample-catalog/catalog.json",
             "samples/starter-example.btgaproj")
 FORBIDDEN_SUFFIXES = {".z64", ".n64", ".v64", ".rom", ".iso", ".cue", ".bin", ".chd", ".img", ".zip", ".7z", ".rar", ".dmp",
                       ".mdmp", ".pcap", ".pcapng", ".log", ".btgapkg"}
@@ -61,6 +64,28 @@ def pe_subsystem(path: Path) -> str:
         raise ValueError(f"{path.name} has an unknown optional header")
     value = struct.unpack_from("<H", data, optional + 68)[0]
     return SUBSYSTEMS.get(value, f"subsystem-{value}")
+
+
+VERSION_KEYS = ("CompanyName", "FileDescription", "FileVersion", "OriginalFilename", "ProductName", "ProductVersion")
+
+
+def version_strings(path: Path) -> dict:
+    """StringFileInfo values from a PE version resource (UTF-16LE key, NUL, 32-bit padding, value)."""
+
+    data = Path(path).read_bytes()
+    out = {}
+    for key in VERSION_KEYS:
+        marker = key.encode("utf-16-le") + b"\x00\x00"
+        position = data.rfind(marker)
+        if position < 0:
+            continue
+        start = position + len(marker)
+        start += (-start) % 4  # values are DWORD aligned
+        end = start
+        while end + 1 < len(data) and data[end:end + 2] != b"\x00\x00":
+            end += 2
+        out[key] = data[start:end].decode("utf-16-le", errors="replace")
+    return out
 
 
 def _contains(path: Path, needles: list[bytes], opener=None) -> list[bytes]:
@@ -88,10 +113,14 @@ def audit(dist: Path, forbid: list[str]) -> dict:
         if not (dist / name).exists():
             problems.append(f"missing required {name}")
     subsystem = None
-    if (dist / "BTGAStudio.exe").is_file():
-        subsystem = pe_subsystem(dist / "BTGAStudio.exe")
+    version = {}
+    if (dist / EXECUTABLE).is_file():
+        subsystem = pe_subsystem(dist / EXECUTABLE)
         if subsystem != "windows-gui":
-            problems.append(f"BTGAStudio.exe uses the {subsystem} subsystem")
+            problems.append(f"{EXECUTABLE} uses the {subsystem} subsystem")
+        version = version_strings(dist / EXECUTABLE)
+        if not version.get("ProductVersion") or version.get("OriginalFilename") != EXECUTABLE:
+            problems.append(f"{EXECUTABLE} has no complete version resource")
     needles = []
     for text in forbid:
         needles += [text.lower().encode("utf-8"), text.lower().encode("utf-16-le")]
@@ -116,7 +145,7 @@ def audit(dist: Path, forbid: list[str]) -> dict:
                             leaks[f"{relative}:{member.filename}"] = len(hits)
     for relative, count in sorted(leaks.items()):
         problems.append(f"{relative} contains {count} forbidden fragment encoding(s)")
-    return {"ok": not problems, "problems": problems, "subsystem": subsystem, "files": len(files),
+    return {"ok": not problems, "problems": problems, "subsystem": subsystem, "version": version, "files": len(files),
             "bytes": sum(p.stat().st_size for p in files)}
 
 

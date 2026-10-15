@@ -32,9 +32,14 @@ BROWSER = "tools/btga_studio/core/browser.py"
 RENDERER = "tools/btga_studio/gui/renderer.py"
 COPIED = ("tools/btga_assets", "tools/btga_studio", "tools/benchmark_studio_editor.py", "tools/btga_world.py", "tools/lzari.py",
           "tools/n64_texture.py", "tests/__init__.py", "tests/test_studio_editor.py", "tests/test_n64_assets.py",
-          "tests/test_studio_authoring.py", "tests/test_studio_acceptance.py", "examples")
+          "tests/test_studio_authoring.py", "tests/test_studio_acceptance.py", "tests/test_studio_product.py", "examples", "COPYING",
+          "src/code/frontend/800E8380_slot_asset_ranges.c", "tests/test_studio_installer.py", "tests/test_studio_history.py",
+          "tests/test_studio_tutorial_fonts.py", "tests/test_studio_setup.py", "tests/test_studio_evidence.py",
+          "tools/audit_studio_package.py", "tools/audit_studio_installer.py", "tools/studio_evidence.py",
+          "private-work/toolchains/fonts")
 TESTS = ("tests.test_studio_editor",)
 ACCEPTANCE_TESTS = ("tests.test_studio_acceptance",)
+PRODUCT_TESTS = ("tests.test_studio_product",)
 
 MUTATIONS = (
     (GEOMETRY, "picking: barycentric bound", "hit = valid & (u >= 0) & (v >= 0) & (u + v <= 1) & (t >= 0)",
@@ -99,6 +104,80 @@ ACCEPTANCE_MUTATIONS = (
 )
 
 
+# Product guarantees (atomic writes, jobs, source registry, hub, install, release, recovery); caught by tests.test_studio_product.
+ATOMIC = "tools/btga_studio/core/atomic.py"
+JOBS = "tools/btga_studio/core/jobs.py"
+SOURCES = "tools/btga_studio/core/sources.py"
+APPLOG = "tools/btga_studio/core/applog.py"
+HUB = "tools/btga_studio/core/hub.py"
+SETTINGS = "tools/btga_studio/core/settings.py"
+RELEASE = "tools/btga_studio/packaging/release.py"
+APP = "tools/btga_studio/gui/app.py"
+PRODUCT_MUTATIONS = (
+    (ATOMIC, "partial file left after a failed write", "        try:\n            os.unlink(temporary)\n        except OSError:\n            pass",
+     "        pass"),
+    (JOBS, "unbounded job queue", "        if len(self.active) >= self.max_pending:", "        if False:"),
+    (JOBS, "cancelled job reported as failed", '            except Cancelled:\n                job.state = "cancelled"', '            except Cancelled:\n                job.state = "failed"'),
+    (SOURCES, "damaged registry silently overwritten", "        except ValueError:\n            self._preserve_unreadable()\n            return",
+     "        except ValueError:\n            return"),
+    (SOURCES, "failed rebuild deletes the working catalog", "        except BaseException:\n            shutil.rmtree(work, ignore_errors=True)\n            raise",
+     "        except BaseException:\n            shutil.rmtree(work, ignore_errors=True)\n            shutil.rmtree(target, ignore_errors=True)\n            raise"),
+    (APPLOG, "Windows folders leak into logs", '    text = _WINDOWS.sub("…/", text)', "    pass"),
+    (HUB, "moved file of another project accepted", "    if expected_id and entry.project_id != expected_id:", "    if False:"),
+    (HUB, "rename overwrites another project", "        if target != path and target.exists():", "        if False:"),
+    (HUB, "duplicate keeps the original identity", '    project = projects.load_project(Path(path))\n    project.project["id"] = secrets.token_hex(8)',
+     '    project = projects.load_project(Path(path))'),
+    (SETTINGS, "preferences accept wrong types", "            if isinstance(default, bool) != isinstance(value, bool):\n                continue",
+     "            pass"),
+    (RELEASE, "zip depends on file times", "            info = zipfile.ZipInfo(f\"{prefix}/{path.relative_to(folder).as_posix()}\", FIXED_TIME)",
+     "            info = zipfile.ZipInfo(f\"{prefix}/{path.relative_to(folder).as_posix()}\", __import__('time').localtime(path.stat().st_mtime)[:6])"),
+    (APP, "missing project not explained", "        if not path.is_file():\n            self.report_error(\"Project not found\"",
+     "        if False:\n            self.report_error(\"Project not found\""),
+    (APP, "panel errors escape the frame guard", "        except Exception as error:  # Dear ImGui error recovery repairs the frame's window/ID stacks",
+     "        except ZeroDivisionError as error:"),
+)
+
+
+# Installer, Unicode resources, definition history, tour and environment guarantees; caught by the release-gate test modules.
+INSTALLER = "tools/btga_studio/core/installer.py"
+VERSIONING = "tools/btga_studio/core/versioning.py"
+FONTSET = "tools/btga_studio/core/fontset.py"
+GUI_FONTS = "tools/btga_studio/gui/fonts.py"
+HISTORY = "tools/btga_studio/core/history.py"
+TUTORIAL = "tools/btga_studio/core/tutorial.py"
+ENVIRONMENT = "tools/btga_studio/core/environment.py"
+RELEASE_GATE_TESTS = ("tests.test_studio_installer", "tests.test_studio_history", "tests.test_studio_tutorial_fonts", "tests.test_studio_setup",
+                      "tests.test_studio_authoring")
+RELEASE_GATE_MUTATIONS = (
+    (INSTALLER, "failed install is not rolled back", "    except BaseException:\n        _rollback(journal, system)\n        raise", "    except BaseException:\n        raise"),
+    (INSTALLER, "damaged payload accepted", "            if sha256(destination) != info[\"sha256\"]:", "            if False:"),
+    (INSTALLER, "unsafe payload path accepted",
+     '    if path.is_absolute() or any(part in ("", ".", "..") or ":" in part for part in path.parts):', "    if False:"),
+    (INSTALLER, "downgrade without confirmation", "(result.warnings if allow_downgrade else result.blockers)", "result.warnings"),
+    (INSTALLER, "upgrade drops files the user added", "                if relative == RECORD or relative in old_files or relative in payload.files:",
+     "                if True:"),
+    (INSTALLER, "running program not detected", "    if running:\n        result.blockers.append", "    if False:\n        result.blockers.append"),
+    (INSTALLER, "uninstall removes user data by default", "    if remove_user_data:\n        for folder in user_data:", "    if True:\n        for folder in user_data:"),
+    (INSTALLER, "uninstall without a record deletes user files", "    return relative in PROGRAM_FILES or relative.startswith(PROGRAM_FOLDERS)", "    return True"),
+    (INSTALLER, "uninstall command not quoted", 'f"{quote_argument(executable)} --uninstall"', 'f"{executable} --uninstall"'),
+    (INSTALLER, "rollback discards a pre-existing shortcut",
+     "            previous_bytes = Path(link).read_bytes() if existed else None", "            previous_bytes = None"),
+    (VERSIONING, "pre-release sorts after its release", "return (self.numbers, self.pre is None, self.pre or \"\")", "return (self.numbers, self.pre is not None, self.pre or \"\")"),
+    (FONTSET, "font with the wrong hash accepted", "path.stat().st_size == entry.size and _sha256(path) == entry.sha256", "path.stat().st_size == entry.size"),
+    (GUI_FONTS, "fallback fonts not merged", "        config.merge_mode = number > 0 and bool(primary)", "        config.merge_mode = False"),
+    (HISTORY, "failed edit stays applied", "        except BaseException:\n            restore(self.project, before)\n            raise", "        except BaseException:\n            raise"),
+    (HISTORY, "typing never stops coalescing", "and now - current.stamp <= COALESCE_SECONDS", "and True"),
+    (PROJECT, "undo history counted as unsaved content", "        return _content(json.loads(dumps(self))) != self._saved_content",
+     "        return dumps(self) != self._saved_text"),
+    (PROJECT, "saved sequence numbers are not deterministic", "        data.update(self.unknown)\n        _rank_sequences(data)", "        data.update(self.unknown)"),
+    (CONTROLLER, "undo picks the older history", "        if def_seq is not None and (doc_seq is None or def_seq > doc_seq):",
+     "        if def_seq is not None and (doc_seq is None or def_seq < doc_seq):"),
+    (TUTORIAL, "earlier work completes a tour step", "            if step.key != \"open\":\n                return False", "            pass"),
+    (ENVIRONMENT, "installed copy reported as portable", "mode = \"installed\" if record is not None else", "mode = \"portable\" if record is not None else"),
+    (RELEASE, "stray files allowed in the release folder", "    if unexpected:\n        raise SystemExit", "    if False:\n        raise SystemExit"),
+)
+
+
 def run(workdir: Path, tests=TESTS) -> bool:
     env = dict(os.environ, PYOPENGL_PLATFORM=os.environ.get("PYOPENGL_PLATFORM", "egl"), BTGA_MUTATION_GATE="1")
     result = subprocess.run([sys.executable, "-m", "unittest", *tests], cwd=workdir, env=env, stdout=subprocess.DEVNULL,
@@ -110,7 +189,8 @@ def main() -> int:
     if importlib.util.find_spec("numpy") is None:
         print("numpy is unavailable; refusing to treat skipped editor tests as a mutation baseline")
         return 2
-    plan = [(m, TESTS) for m in MUTATIONS] + [(m, ACCEPTANCE_TESTS) for m in ACCEPTANCE_MUTATIONS]
+    plan = ([(m, TESTS) for m in MUTATIONS] + [(m, ACCEPTANCE_TESTS) for m in ACCEPTANCE_MUTATIONS]
+            + [(m, PRODUCT_TESTS) for m in PRODUCT_MUTATIONS] + [(m, RELEASE_GATE_TESTS) for m in RELEASE_GATE_MUTATIONS])
     originals = {path: (ROOT / path).read_text(encoding="utf-8") for path in {m[0] for m, _ in plan}}
     with tempfile.TemporaryDirectory() as temp:
         work = Path(temp)
@@ -122,7 +202,7 @@ def main() -> int:
             else:
                 shutil.copy2(source, target)
         (work / "tools" / "__init__.py").touch()
-        for tests in (TESTS, ACCEPTANCE_TESTS):
+        for tests in (TESTS, ACCEPTANCE_TESTS, PRODUCT_TESTS, RELEASE_GATE_TESTS):
             if not run(work, tests):
                 print(f"baseline {' '.join(tests)} fails; refusing to judge mutations")
                 return 2
