@@ -23,6 +23,16 @@ welcome screen offers **Create Original Project**, **Import From My Games**,
 `README.txt` in the download explains installation, storage locations, and
 problem reporting.
 
+![BattleTanx Studio guided map editing](docs/media/studio-guided-placement.png)
+
+*Place and edit gameplay objects directly in the 3D viewport. The screenshot
+uses the included synthetic starter project and contains no game data.*
+
+![BattleTanx Studio Windows setup](docs/media/studio-windows-setup.png)
+
+*The per-user Windows setup requires no administrator access and clearly keeps
+game data separate from Studio.*
+
 ## For developers
 
 Python 3.11 or newer is recommended.
