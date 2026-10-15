@@ -36,7 +36,7 @@ COPIED = ("tools/btga_assets", "tools/btga_studio", "tools/benchmark_studio_edit
           "src/code/frontend/800E8380_slot_asset_ranges.c", "tests/test_studio_installer.py", "tests/test_studio_history.py",
           "tests/test_studio_tutorial_fonts.py", "tests/test_studio_setup.py", "tests/test_studio_evidence.py",
           "tools/audit_studio_package.py", "tools/audit_studio_installer.py", "tools/studio_evidence.py",
-          "private-work/toolchains/fonts")
+          "private-work/toolchains/fonts", "tests/test_studio_imports.py")
 TESTS = ("tests.test_studio_editor",)
 ACCEPTANCE_TESTS = ("tests.test_studio_acceptance",)
 PRODUCT_TESTS = ("tests.test_studio_product",)
@@ -178,6 +178,59 @@ RELEASE_GATE_MUTATIONS = (
 )
 
 
+# Importing outside resources, sky panoramas, teleporters and OpenStreetMap cities; caught by tests.test_studio_imports.
+IMAGING = "tools/btga_studio/core/imaging.py"
+IMPORTS = "tools/btga_studio/core/imports.py"
+GEO = "tools/btga_studio/core/geo.py"
+OSM = "tools/btga_studio/core/osm.py"
+SKY = "tools/btga_studio/core/sky.py"
+SKYLINE = "tools/btga_studio/core/skyline.py"
+DIAGNOSTICS = "tools/btga_studio/core/diagnostics.py"
+IMPORT_TESTS = ("tests.test_studio_imports",)
+IMPORT_MUTATIONS = (
+    (IMAGING, "PNG palette index unchecked", "        if int(indices.max(initial=0)) >= len(palette):\n            raise ImageError", "        if False:\n            raise ImageError"),
+    (IMAGING, "PNG Paeth predictor wrong", "values[i] = (values[i] + (left if pa <= pb and pa <= pc else up[i] if pb <= pc else corner)) & 0xFF",
+     "values[i] = (values[i] + (left if pa <= pb else up[i])) & 0xFF"),
+    (IMAGING, "JPEG chroma not upsampled per component", "np.repeat(np.repeat(plane, vmax // c[\"v\"], axis=0), hmax // c[\"h\"], axis=1)",
+     "np.repeat(np.repeat(plane, 1, axis=0), 1, axis=1)"),
+    (IMAGING, "progressive JPEG decoded as baseline", "        if marker in (0xC2, 0xC6, 0xCA, 0xCE):", "        if False:"),
+    (IMAGING, "image size limit missing", "    if width > MAX_INPUT_SIDE or height > MAX_INPUT_SIDE or width * height > MAX_INPUT_PIXELS:", "    if False:"),
+    (IMPORTS, "OBJ texture rows not flipped", "uvs.append((float(parts[1]), 1.0 - float(parts[2]) if len(parts) > 2 else 1.0))",
+     "uvs.append((float(parts[1]), float(parts[2]) if len(parts) > 2 else 0.0))"),
+    (IMPORTS, "paths may leave the model folder", "        if resolved.is_file() and folder in resolved.parents:", "        if resolved.is_file():"),
+    (IMPORTS, "Z-up models not turned", "        points = np.stack([points[:, 0], points[:, 2], -points[:, 1]], axis=1)", "        pass"),
+    (IMPORTS, "removing a model drops textures still in use", "            if key in textures and key not in used:", "            if key in textures:"),
+    (IMPORTS, "credit not stored", 'record = {"width": width, "height": height, "rgba": rgba, "wrap": {"s": wrap, "t": wrap}, "alpha": alpha, "format": "rgba8",',
+     'options = ImportOptions(group=options.group)\n    record = {"width": width, "height": height, "rgba": rgba, "wrap": {"s": wrap, "t": wrap}, "alpha": alpha, "format": "rgba8",'),
+    (PACKAGE, "imported resources not embedded", 'STARTER_PLATFORMS = ("studio", "user")', 'STARTER_PLATFORMS = ("studio",)'),
+    (PACKAGE, "sky picture not checked on read", "            if not isinstance(texture, str) or (texture.startswith(", "            if False and (texture.startswith("),
+    (PROJECT, "invalid sky accepted", "                environment[\"sky\"] = sky_module.check(sky)", "                environment[\"sky\"] = dict(sky)"),
+    (HISTORY, "undo leaves the sky", '            else:\n                entry.base["environment"][0].pop("sky", None)', "            else:\n                pass"),
+    (SCENE, "missing import crashes the map", "        except StudioError:  # an imported model missing", "        except ZeroDivisionError:  # an imported model missing"),
+    (DIAGNOSTICS, "teleporter without exit accepted", '            if not target:\n                out.append(Diagnostic("error", "TELEPORTER_WITHOUT_EXIT"',
+     '            if False:\n                out.append(Diagnostic("error", "TELEPORTER_WITHOUT_EXIT"'),
+    (OVERLAY, "generated overlap hides real overlaps",
+     'if other["id"] == shape["id"] or (shape.get("allow_overlap") and other.get("allow_overlap")):',
+     'if other["id"] == shape["id"] or (shape.get("allow_overlap") or other.get("allow_overlap")):'),
+    (GEO, "holes not cut from roofs", "    for hole in hole_rings:\n        ring = _bridge(points, ring, hole)", "    pass"),
+    (GEO, "projection ignores latitude", "self.m_per_lon = math.radians(1) * WGS84_A / math.sqrt(w) * math.cos(phi)", "self.m_per_lon = math.radians(1) * WGS84_A / math.sqrt(w)"),
+    (OSM, "heights in feet read as metres", "        return round(float(match.group(1)) * 0.3048 + float(match.group(2) or 0) * 0.0254, 3)",
+     "        return float(match.group(1))"),
+    (OSM, "edge boxes leave the map", "        if not all(self.inside(corner) for corner in corners):\n            return None", "        pass"),
+    (OSM, "ballpark filled solid", "                if building.bowl is not None:\n                    field_centre", "                if False:\n                    field_centre"),
+    (OSM, "open stadium without a mapped field filled solid", "                    building.bowl = _field_ring(building.outer)", "                    pass"),
+    (OSM, "indoor arenas opened up", '                elif building.tags.get("building") == "stadium":', "                else:"),
+    (OSM, "gabled roofs become pyramids", "    inset = half_width if hipped else 0.0", "    inset = half_length"),
+    (OSM, "sharp ground used everywhere", "                    if math.hypot(origin[0] - centre[0], origin[1] - centre[1]) > radius:", "                    if False:"),
+    (OSM, "street lamps left out", '            if kind == "street_lamp":\n                post(', '            if False:\n                post('),
+    (OSM, "skyways treated as corridors", "                if all(in_building(p) for p in middles):", "                if True:"),
+    (OSM, "ground ignores elevation", "        values = self.terrain.elevation(lat, lon)\n        return np.where(np.isnan(values), self.reference, values)",
+     "        return np.full(len(points), self.reference)"),
+    (SKY, "sky turned the wrong way", "    return math.sin(angle), -math.cos(angle)", "    return -math.sin(angle), -math.cos(angle)"),
+    (SKYLINE, "earth curvature ignored", "    return distance * distance / (2 * EARTH_RADIUS) * (1 - REFRACTION)", "    return distance * 0.0"),
+)
+
+
 def run(workdir: Path, tests=TESTS) -> bool:
     env = dict(os.environ, PYOPENGL_PLATFORM=os.environ.get("PYOPENGL_PLATFORM", "egl"), BTGA_MUTATION_GATE="1")
     result = subprocess.run([sys.executable, "-m", "unittest", *tests], cwd=workdir, env=env, stdout=subprocess.DEVNULL,
@@ -190,7 +243,8 @@ def main() -> int:
         print("numpy is unavailable; refusing to treat skipped editor tests as a mutation baseline")
         return 2
     plan = ([(m, TESTS) for m in MUTATIONS] + [(m, ACCEPTANCE_TESTS) for m in ACCEPTANCE_MUTATIONS]
-            + [(m, PRODUCT_TESTS) for m in PRODUCT_MUTATIONS] + [(m, RELEASE_GATE_TESTS) for m in RELEASE_GATE_MUTATIONS])
+            + [(m, PRODUCT_TESTS) for m in PRODUCT_MUTATIONS] + [(m, RELEASE_GATE_TESTS) for m in RELEASE_GATE_MUTATIONS]
+            + [(m, IMPORT_TESTS) for m in IMPORT_MUTATIONS])
     originals = {path: (ROOT / path).read_text(encoding="utf-8") for path in {m[0] for m, _ in plan}}
     with tempfile.TemporaryDirectory() as temp:
         work = Path(temp)
