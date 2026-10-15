@@ -221,9 +221,10 @@ def _zip(files: dict[str, bytes]) -> bytes:
 
 
 def write_package(path: Path, project: StudioProject, library, studio_version: str = "0") -> Path:
+    from .atomic import atomic_write_bytes
+
     data = build_package(project, library, studio_version)
-    Path(path).write_bytes(data)
-    return Path(path)
+    return atomic_write_bytes(Path(path), data)
 
 
 # ------------------------------------------------------------------- reading --

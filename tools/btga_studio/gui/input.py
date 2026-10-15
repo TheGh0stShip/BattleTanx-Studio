@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 DEFAULT_BINDINGS = {
     "forward": "W", "back": "S", "left": "A", "right": "D", "down": "Q", "up": "E",
     "frame_selection": "F", "frame_map": "Home", "cancel": "Escape", "delete": "Delete",
-    "gizmo_translate": "1", "gizmo_rotate": "2", "gizmo_scale": "3",
+    "gizmo_translate": "1", "gizmo_rotate": "2", "gizmo_scale": "3", "gizmo_select": "4",
     "hide": "H", "isolate": "I", "lock": "L", "unhide_all": "U",
 }
 BINDABLE_KEYS = tuple("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") + ("Home", "End", "Escape", "Delete", "Insert", "PageUp", "PageDown",
@@ -91,7 +91,7 @@ def commands(state: InputState) -> list[Command]:
         if keys[action] in pressed:
             out.append(Command(action))
     if not state.right_down:
-        for action, mode in (("gizmo_translate", "translate"), ("gizmo_rotate", "rotate"), ("gizmo_scale", "scale")):
+        for action, mode in (("gizmo_select", "select"), ("gizmo_translate", "translate"), ("gizmo_rotate", "rotate"), ("gizmo_scale", "scale")):
             if keys[action] in pressed:
                 out.append(Command("gizmo_mode", {"mode": mode}))
     if state.right_down:

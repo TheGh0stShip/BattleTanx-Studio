@@ -49,8 +49,7 @@ class SourceError(ValueError):
     pass
 
 
-class Cancelled(Exception):
-    pass
+from .jobs import Cancelled  # noqa: E402  (one cancellation type for every background job)
 
 
 @dataclass
@@ -127,7 +126,7 @@ def identify(path: Path, progress=None) -> Source:
     status, detail = ("supported", f"{order} byte order" + (" (normalised)" if order != "z64" else "")) if known else ("unknown", "")
     if not known:
         detail = (f"SHA-1 {sha1} is not a supported revision; Studio supports "
-                  + ", ".join(f"{title} ({digest[:8]}…)" for digest, (_, title) in N64_REVISIONS.items()))
+                  + ", ".join(f"{title} ({digest[:8]}...)" for digest, (_, title) in N64_REVISIONS.items()))
         if len(rom) != N64_ROM_SIZE:
             detail += f"; size {len(rom)} differs from the 8 MiB retail ROMs (truncated or modified?)"
     platform, title = known if known else (None, "Unknown N64 ROM")
@@ -162,7 +161,7 @@ def _identify_ps1_image(path: Path, stat) -> Source:
 def _ps1_source(path: Path, kind: str, digest: str, missing: list[str], stat) -> Source:
     known = PS1_EXECUTABLES.get(digest)
     if not known:
-        status, detail = "unknown", f"SLUS_010.44 SHA-256 {digest[:16]}… is not the supported USA release"
+        status, detail = "unknown", f"SLUS_010.44 SHA-256 {digest[:16]}... is not the supported USA release"
     elif missing:
         status, detail = "incomplete", "missing " + ", ".join(missing)
     else:
@@ -172,12 +171,52 @@ def _ps1_source(path: Path, kind: str, digest: str, missing: list[str], stat) ->
                   identity={"platform": platform, "file_sha256": digest, "file": "SLUS_010.44"} if platform else {})
 
 
-class SourceRegistry:
-    """The user's registered sources, stored in ``<data>/sources.json``."""
+PLATFORM_NAMES = {"n64_btga": ("BattleTanx: Global Assault", "Nintendo 64", "USA"),
+                  "n64_bt1": ("BattleTanx", "Nintendo 64", "USA"),
+                  "ps1": ("BattleTanx: Global Assault", "PlayStation", "USA (SLUS-01044)")}
+STATUS_TEXT = {
+    "supported": "Ready. This is a supported copy of the game.",
+    "unknown": "Not recognised. This file is not a supported BattleTanx release (wrong game, region, revision, or a modified copy).",
+    "mismatched": "Changed. The file at the registered location is no longer the copy you registered.",
+    "incomplete": "Incomplete. Some files Studio needs are missing from this disc or folder.",
+    "missing": "Missing. The file or folder is no longer where it was registered. Use Relink to point to its new location.",
+}
 
-    def __init__(self, data_directory: Path):
+
+def describe(source: "Source") -> dict:
+    """Plain-language facts about a source for the Source Manager (no paths)."""
+
+    game, console, region = PLATFORM_NAMES.get(source.platform, ("Unknown game", "Unknown", "Unknown"))
+    order = next((o for o in ("z64", "v64", "n64") if source.detail.startswith(o)), None)
+    return {"game": game, "platform": console, "region": region,
+            "byte_order": {"z64": "Big-endian (.z64)", "v64": "Byte-swapped (.v64, converted for reading)",
+                           "n64": "Little-endian (.n64, converted for reading)"}.get(order, "Not applicable" if source.kind != "rom" else "Unknown"),
+            "revision": ("Matches the supported USA release by hash" if source.platform else "Unrecognised (no supported hash matches)"),
+            "verified": source.status == "supported",
+            "hash": (f"SHA-1 {source.sha1}" if source.sha1 else f"SHA-256 {source.sha256}"),
+            "status": STATUS_TEXT.get(source.status, source.status),
+            "kind": {"rom": "Cartridge ROM file", "image": "Disc image", "folder": "Extracted disc folder"}.get(source.kind, source.kind)}
+
+
+def directory_size(path: Path) -> int:
+    total = 0
+    for root, _, files in os.walk(path):
+        for name in files:
+            try:
+                total += (Path(root) / name).stat().st_size
+            except OSError:
+                pass
+    return total
+
+
+class SourceRegistry:
+    """The user's registered sources, stored in ``<data>/sources.json``; catalogs in ``<catalog root>/catalogs``."""
+
+    def __init__(self, data_directory: Path, catalog_root: Path | None = None):
         self.directory = Path(data_directory)
+        self.catalog_root = Path(catalog_root) if catalog_root else self.directory
         self.sources: dict[str, Source] = {}
+        self.problems: list[str] = []
         self._lock = threading.Lock()
         self.load()
 
@@ -187,7 +226,7 @@ class SourceRegistry:
 
     @property
     def catalogs(self) -> Path:
-        return self.directory / "catalogs"
+        return self.catalog_root / "catalogs"
 
     def _catalog_path(self, name: str) -> Path:
         """Resolve a registry catalog name without trusting editable JSON."""
@@ -198,25 +237,43 @@ class SourceRegistry:
 
     def load(self) -> None:
         try:
-            data = json.loads(self.file.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+            text = self.file.read_text(encoding="utf-8")
+        except OSError:
             return
-        if data.get("version") != REGISTRY_VERSION:
+        try:
+            data = json.loads(text)
+            if not isinstance(data, dict) or data.get("version") != REGISTRY_VERSION or not isinstance(data.get("sources"), list):
+                raise ValueError("unsupported registry layout")
+        except ValueError:
+            self._preserve_unreadable()
             return
-        for item in data.get("sources", []):
+        for item in data["sources"]:
             try:
                 source = Source(**item)
             except TypeError:
+                self.problems.append("one registry entry could not be read and was skipped")
                 continue
             self.sources[source.id] = source
 
+    def _preserve_unreadable(self) -> None:
+        """Keep a damaged or newer registry aside instead of overwriting it on the next save."""
+
+        for number in range(1, 100):
+            backup = self.file.with_name(f"sources.unreadable-{number}.json")
+            if not backup.exists():
+                try:
+                    os.replace(self.file, backup)
+                except OSError:
+                    return
+                self.problems.append(f"the source list could not be read; it was kept as {backup.name} and a new list was started")
+                return
+
     def save(self) -> None:
-        self.directory.mkdir(parents=True, exist_ok=True)
+        from .atomic import atomic_write_text
+
         text = json.dumps({"version": REGISTRY_VERSION, "sources": [asdict(s) for s in sorted(self.sources.values(), key=lambda s: s.id)]},
                           indent=1, sort_keys=True, ensure_ascii=False) + "\n"
-        temporary = self.file.with_name(self.file.name + ".tmp")
-        temporary.write_text(text, encoding="utf-8")
-        os.replace(temporary, self.file)
+        atomic_write_text(self.file, text)
 
     def register(self, path: Path, progress=None) -> Source:
         source = identify(Path(path), progress)
@@ -301,13 +358,34 @@ class SourceRegistry:
         return self.catalogs / f"{source.platform}-{source.sha256[:16]}"
 
     def catalog_roots(self) -> list[Path]:
+        """Catalog folders that exist; an entry with an unsafe catalog name is skipped (never followed)."""
+
         roots = []
         for source in sorted(self.sources.values(), key=lambda s: s.id):
             if source.catalog:
-                root = self._catalog_path(source.catalog)
+                try:
+                    root = self._catalog_path(source.catalog)
+                except SourceError:
+                    continue
                 if (root / "catalog.json").is_file():
                     roots.append(root)
         return roots
+
+    def catalog_state(self, source: Source) -> tuple[str, int]:
+        """("built" | "not built" | "damaged", bytes on disk)."""
+
+        if not source.catalog:
+            return "not built", 0
+        try:
+            root = self._catalog_path(source.catalog)
+        except SourceError:
+            return "damaged", 0
+        if not (root / "catalog.json").is_file():
+            return "not built", 0
+        return "built", directory_size(root)
+
+    def disk_usage(self) -> int:
+        return directory_size(self.catalogs) if self.catalogs.is_dir() else 0
 
     def build_catalog(self, source_id: str, progress=None, cancel: threading.Event | None = None, model_glb: bool = False) -> Path:
         """Decode a supported source into its catalog directory (deterministic; replaces any previous build)."""
@@ -334,7 +412,10 @@ class SourceRegistry:
 def _slot_source() -> str:
     from tools.btga_studio.core.settings import program_directory
 
+    from tools.btga_studio.core.settings import bundled_data_directory
+
     candidates = [Path(__file__).resolve().parents[3] / "src/code/frontend/800E8380_slot_asset_ranges.c",
+                  bundled_data_directory() / "800E8380_slot_asset_ranges.c",
                   program_directory() / "data" / "800E8380_slot_asset_ranges.c"]
     for candidate in candidates:
         if candidate.is_file():

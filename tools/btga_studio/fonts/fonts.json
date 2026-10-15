@@ -1,0 +1,63 @@
+{
+ "format": "btga-studio-fonts",
+ "version": 1,
+ "fonts": [
+  {
+   "file": "DejaVuSans.ttf",
+   "family": "DejaVu Sans",
+   "version": "2.37",
+   "role": "primary",
+   "coverage": "Latin (including accented), Greek, Cyrillic, common symbols",
+   "license": "Bitstream Vera Fonts license with DejaVu changes in the public domain",
+   "license_file": "LICENSE-DejaVu.txt",
+   "upstream": "https://dejavu-fonts.github.io/",
+   "obtained_from": "Ubuntu 24.04 package fonts-dejavu-core 2.37-8 (archive.ubuntu.com, noble/main)",
+   "package_url": "https://archive.ubuntu.com/ubuntu/pool/main/f/fonts-dejavu/fonts-dejavu-core_2.37-8_all.deb",
+   "package_sha256": "40049660c194f3b8a2541fc7369efebb10e9f94bdac836a2f38fafedd10fa73a",
+   "package_path": "usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+   "sha256": "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280",
+   "size": 759720,
+   "system_paths": [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+   ]
+  },
+  {
+   "file": "DroidSansFallbackFull.ttf",
+   "family": "Droid Sans Fallback",
+   "version": "Android 6.0.1r16",
+   "role": "fallback",
+   "coverage": "Chinese (simplified and traditional), Japanese kana and kanji, Korean Hangul",
+   "license": "Apache License 2.0",
+   "license_file": "LICENSE-DroidSansFallback.txt",
+   "upstream": "https://android.googlesource.com/platform/frameworks/base/",
+   "obtained_from": "Ubuntu 24.04 package fonts-droid-fallback 1:6.0.1r16-1.1build1 (archive.ubuntu.com, noble/main)",
+   "package_url": "https://archive.ubuntu.com/ubuntu/pool/main/f/fonts-android/fonts-droid-fallback_6.0.1r16-1.1build1_all.deb",
+   "package_sha256": "353e093dd32677e48edbdc9c94c4e92db0e80763fc326ddec1ba8281d8553a5e",
+   "package_path": "usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+   "sha256": "acb6440a713d880a13a21b468ba7cd43f5a2b2934972e51be791c880730777b8",
+   "size": 4033420,
+   "system_paths": [
+    "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf"
+   ]
+  },
+  {
+   "file": "NanumGothic.ttf",
+   "family": "Nanum Gothic",
+   "version": "Debian fonts-nanum 20200506",
+   "role": "fallback",
+   "coverage": "Korean Hangul",
+   "license": "SIL Open Font License 1.1",
+   "license_file": "LICENSE-Nanum.txt",
+   "upstream": "https://hangeul.naver.com/",
+   "obtained_from": "Ubuntu 24.04 package fonts-nanum 20200506-1 (archive.ubuntu.com, noble/universe); package SHA-256 9242c551bbb66507a7251910ff06eb515a2a0faa5b860d87bd2eadc58ec7c3c8",
+   "package_url": "https://archive.ubuntu.com/ubuntu/pool/universe/f/fonts-nanum/fonts-nanum_20200506-1_all.deb",
+   "package_sha256": "9242c551bbb66507a7251910ff06eb515a2a0faa5b860d87bd2eadc58ec7c3c8",
+   "package_path": "usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+   "sha256": "48a28e97b34fc8e5b157657633670cd1b7de126cfc414da65ce9c3d5bc8be733",
+   "size": 4691820,
+   "system_paths": [
+    "/usr/share/fonts/truetype/nanum/NanumGothic.ttf"
+   ]
+  }
+ ]
+}

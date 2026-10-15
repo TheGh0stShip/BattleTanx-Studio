@@ -18,7 +18,6 @@ from pathlib import Path
 
 import numpy as np
 from imgui_bundle import hello_imgui, imgui, immapp, imguizmo
-from imgui_bundle import portable_file_dialogs as pfd
 
 from tools.btga_studio import __version__
 from tools.btga_studio.core import geometry as g
@@ -29,7 +28,11 @@ from tools.btga_studio.core.controller import EditorController
 from tools.btga_studio.core.document import EditError
 from tools.btga_studio.core.settings import Settings
 from tools.btga_studio.core.thumbnails import ThumbnailCache, ThumbnailService
+from tools.btga_studio.core import desktop, hub
 from tools.btga_studio.gui.input import BINDABLE_KEYS, DEFAULT_BINDINGS, InputState, commands, validate_bindings
+from tools.btga_studio.gui import fonts
+from tools.btga_studio.gui.help import TOPICS as HELP_TOPICS
+from tools.btga_studio.gui.windows import ProductUI, friendly_ids
 
 gizmo = imguizmo.im_guizmo
 PROJECT_FILTER = ["BattleTanx Studio project", "*.btgaproj"]
@@ -38,6 +41,16 @@ SOURCE_FILTER = ["BattleTanx sources", "*.z64 *.v64 *.n64 *.cue *.bin *.iso", "A
 STATUS_COLOURS = {"supported": (0.4, 0.9, 0.4, 1), "unknown": (0.9, 0.8, 0.3, 1), "mismatched": (1, 0.45, 0.3, 1),
                   "incomplete": (1, 0.7, 0.3, 1), "missing": (1, 0.35, 0.35, 1)}
 DEFINITION_FAMILIES = ("missions", "multiplayer", "minigames", "tanks", "gangs")
+LAYER_HELP = {
+    "geometry": "The visible models and ground of the map.",
+    "collision": "Invisible shapes that stop tanks and shots. Shown as outlined boxes.",
+    "markers": "Spawns, pickups, objectives and other gameplay objects.",
+    "navigation": "Points and links the computer-controlled tanks use to find their way.",
+    "bounds": "The edge of the playable area.",
+    "minimap": "The area the in-game minimap shows.",
+    "unresolved": "Records from your game whose purpose is not known yet. Studio shows them but will not change them.",
+    "grid": "A reference grid on the ground with the map's centre axes.",
+}
 
 
 def _keymap() -> dict[str, int]:
@@ -57,7 +70,7 @@ def _vec(v) -> tuple:
     return (float(v[0]), float(v[1]))
 
 
-class StudioApp:
+class StudioApp(ProductUI):
     def __init__(self, settings: Settings, catalog: Path | None = None, project: Path | None = None, controller: EditorController | None = None):
         self.settings = settings
         self.controller = controller or EditorController(settings)
@@ -100,6 +113,9 @@ class StudioApp:
         self.drag_payload = None
         self.viewport_origin = None  # screen position of the viewport image (used by the off-screen acceptance driver)
         self._renderer_cls = None
+        self.layout_reset_requested = False
+        self.init_product()
+        self.controller.history_listener = self.after_history
 
     # -- lifecycle -----------------------------------------------------------------
     def post_init(self) -> None:
@@ -114,11 +130,20 @@ class StudioApp:
                 c.open_catalog(Path(catalog))
             except EditError as error:
                 c.log("error", str(error))
+        io = imgui.get_io()
+        io.config_error_recovery = True  # a failing panel must not take the editor down
+        io.config_error_recovery_enable_assert = False
         self.attach_library()
+        for problem in fonts.STATUS.problems:
+            c.log("warning", problem)
+        if self.settings.migrated_from:
+            c.log("info", f"settings and registered games were copied from an earlier version ({self.settings.migrated_from})")
         if project:
             self.open_project(Path(project))
         elif c.recoveries():
             self.show_recovery = True
+        if c.project is None and (self.settings.preferences.show_hub_at_start or not self.settings.preferences.welcome_seen):
+            self.open_hub()
 
     def attach_library(self) -> None:
         c = self.controller
@@ -158,9 +183,45 @@ class StudioApp:
             self.controller.log("error", f"{label}: {error}")
             return False
 
-    def open_project(self, path: Path) -> None:
-        if self.guarded("open project", self.controller.open_project, Path(path)):
-            self._load_into_renderer()
+    def open_project(self, path: Path) -> bool:
+        """Open a project; any failure is explained in a dialog and the current state stays usable."""
+
+        path = Path(path)
+        c = self.controller
+        if not path.is_file():
+            self.report_error("Project not found", f"{path.name} is no longer in {path.parent.name}. It may have been moved, renamed or deleted.",
+                              actions=(("Find it...", lambda: self.locate_recent(hub.peek(path))),
+                                       ("Remove from recent list", lambda: self.forget_recent(path))))
+            return False
+        previous = (c.project, c.active_map)
+        try:
+            c.open_project(path)
+        except (projects.ProjectError, OSError, UnicodeDecodeError, ValueError) as error:
+            c.project, c.active_map = previous
+            message = str(error)
+            if isinstance(error, projects.FutureVersion):
+                message += "\n\nThis project was saved by a newer version of Studio. Install the newer version to open it."
+            else:
+                message += "\n\nThe file may be damaged or is not a BattleTanx Studio project. Your other work is unaffected."
+            self.report_error(f"{path.name} could not be opened", message, traceback.format_exc(),
+                              actions=(("Remove from recent list", lambda: self.forget_recent(path)),))
+            return False
+        self.show_hub = False
+        self.hub_refresh = True
+        self._load_into_renderer()
+        problems = [m for level, m in c.messages[-20:] if level == "error"]
+        if c.project is not None and c.active_map is None and c.project.maps:
+            self.report_error("Some maps need a game you have not added",
+                              "This project uses maps from a BattleTanx game that is not registered or has changed. "
+                              "Add your copy in the Source Manager, then open the project again.",
+                              actions=(("Open Source Manager", lambda: setattr(self, "show_sources", True)),))
+        elif problems:
+            c.log("warning", "opened with warnings; see the Validation tab")
+        return True
+
+    def forget_recent(self, path: Path) -> None:
+        self.settings.preferences.remove_recent(str(path))
+        self.hub_refresh = True
 
     def switch_map(self, key: str) -> None:
         if self.guarded("open map", self.controller.switch_map, key):
@@ -171,14 +232,20 @@ class StudioApp:
         c = self.controller
         prefs = self.settings.preferences
         has_doc = c.document is not None
+        doc = c.document
         if imgui.begin_menu("File"):
+            if imgui.menu_item("Project Hub...", "", False)[0]:
+                self.open_hub()
             if imgui.menu_item("New project...", "Ctrl+N", False)[0]:
                 self.request("new_project")
             if imgui.menu_item("Open project...", "Ctrl+O", False)[0]:
                 self.request("open_project")
+            if imgui.menu_item("Open example project", "", False)[0]:
+                self.request("open_example")
             if imgui.begin_menu("Recent projects", bool(prefs.recent_projects)):
                 for path in list(prefs.recent_projects):
-                    if imgui.menu_item(Path(path).name, "", False)[0]:
+                    exists = Path(path).is_file()
+                    if imgui.menu_item(Path(path).stem + ("" if exists else "  (moved?)"), "", False)[0]:
                         self.request("open_path", path)
                 imgui.end_menu()
             imgui.separator()
@@ -186,31 +253,34 @@ class StudioApp:
                 self.save()
             if imgui.menu_item("Save as...", "Ctrl+Shift+S", False, c.project is not None)[0]:
                 self.save(ask=True)
+            if imgui.menu_item("Show project in folder", "", False, c.project_path is not None)[0]:
+                self.safe_desktop(desktop.open_folder, c.project_path)
             imgui.separator()
             if imgui.menu_item("Export content package...", "", False, c.project is not None)[0]:
                 self.export_package()
-            if imgui.menu_item("Export preview package...", "", False, has_doc)[0]:
-                folder = pfd.select_folder("Export preview package (inspection only)").result()
-                if folder:
-                    projects.export_preview(Path(folder), c.document, c.library, c.diagnostics)
-                    c.log("info", f"preview package written to {Path(folder).name}")
             imgui.separator()
-            if imgui.menu_item("Source manager...", "", False)[0]:
+            if imgui.menu_item("Source Manager...", "", False)[0]:
                 self.show_sources = True
-            if imgui.menu_item("Open catalog folder...", "", False)[0]:
-                folder = pfd.select_folder("Open a neutral catalog folder").result()
-                if folder and self.guarded("open catalog", c.open_catalog, Path(folder)):
-                    self.attach_library()
+            if imgui.begin_menu("Developer"):
+                imgui.text_disabled("For working with exported catalog folders")
+                if imgui.menu_item("Open catalog folder...", "", False)[0]:
+                    folder = self.dialogs.select_folder("Open a neutral catalog folder")
+                    if folder and self.guarded("open catalog", c.open_catalog, Path(folder)):
+                        self.attach_library()
+                if imgui.menu_item("Export preview package...", "", False, has_doc)[0]:
+                    folder = self.dialogs.select_folder("Export preview package (inspection only)")
+                    if folder:
+                        self.attempt("Preview export", projects.export_preview, Path(folder), c.document, c.library, c.diagnostics)
+                imgui.end_menu()
             imgui.separator()
-            if imgui.menu_item("Exit", "", False)[0] and self.runner() is not None:
-                self.runner().app_shall_exit = True
+            if imgui.menu_item("Exit", "Alt+F4", False)[0]:
+                self.request("exit")
             imgui.end_menu()
         if imgui.begin_menu("Edit"):
-            doc = c.document
-            if imgui.menu_item("Undo", "Ctrl+Z", False, bool(doc and doc.undo_stack))[0]:
-                c.undo()
-            if imgui.menu_item("Redo", "Ctrl+Y", False, bool(doc and doc.redo_stack))[0]:
-                c.redo()
+            if imgui.menu_item("Undo", "Ctrl+Z", False, c.can_undo)[0]:
+                self.undo()
+            if imgui.menu_item("Redo", "Ctrl+Y", False, c.can_redo)[0]:
+                self.redo()
             imgui.separator()
             if imgui.menu_item("Copy", "Ctrl+C", False, bool(doc and doc.selection))[0]:
                 self.copy()
@@ -218,7 +288,7 @@ class StudioApp:
                 c.paste()
             if imgui.menu_item("Duplicate", "Ctrl+D", False, bool(doc and doc.selection))[0]:
                 c.duplicate()
-            if imgui.menu_item("Delete / disable", "Del", False, bool(doc and doc.selection))[0]:
+            if imgui.menu_item("Delete", "Del", False, bool(doc and doc.selection))[0]:
                 c.delete()
             imgui.separator()
             if imgui.menu_item("Select all", "Ctrl+A", False, has_doc)[0]:
@@ -227,80 +297,96 @@ class StudioApp:
                 doc.select(None)
             imgui.end_menu()
         if imgui.begin_menu("View"):
-            for layer in ("geometry", "collision", "markers", "navigation", "bounds", "minimap", "unresolved", "grid"):
-                changed, value = imgui.menu_item(f"Show {layer}", "", prefs.layers.get(layer, True))
+            for layer, label in (("geometry", "Models and terrain"), ("collision", "Collision"), ("markers", "Gameplay objects"),
+                                 ("navigation", "Navigation"), ("bounds", "Map bounds"), ("minimap", "Minimap area"),
+                                 ("unresolved", "Unresolved records"), ("grid", "Grid")):
+                changed, value = imgui.menu_item(label, "", prefs.layers.get(layer, True))
                 if changed:
                     prefs.layers[layer] = value
             _, prefs.wireframe = imgui.menu_item("Wireframe", "", prefs.wireframe)
             imgui.separator()
             keys = validate_bindings(prefs.bindings)
-            doc = c.document
             for label, action, enabled in (("Hide selection", "hide", bool(doc and doc.selection)), ("Isolate selection", "isolate", bool(doc and doc.selection)),
-                                           ("Unhide all", "unhide_all", bool(doc and doc.hidden)), ("Lock selection", "lock", bool(doc and doc.selection))):
+                                           ("Show all", "unhide_all", bool(doc and doc.hidden)), ("Lock selection", "lock", bool(doc and doc.selection))):
                 if imgui.menu_item(label, keys[action], False, enabled)[0]:
                     getattr(doc, action)()
             if imgui.menu_item("Unlock all", "", False, bool(doc and doc.locked))[0]:
                 doc.unlock_all()
             imgui.separator()
-            if imgui.menu_item("Frame map", keys["frame_map"], False)[0]:
+            if imgui.menu_item("Frame map", keys["frame_map"], False, has_doc)[0]:
                 c.frame_map()
-            if imgui.menu_item("Focus selection", keys["frame_selection"], False)[0]:
+            if imgui.menu_item("Focus selection", keys["frame_selection"], False, bool(doc and doc.selection))[0]:
                 c.frame_selection()
             imgui.separator()
-            _, self.show_definitions = imgui.menu_item("Project definitions", "", self.show_definitions)
+            if imgui.menu_item("Reset window layout", "", False)[0]:
+                self.reset_layout()
             imgui.end_menu()
         if imgui.begin_menu("Create"):
-            if imgui.menu_item("New map...", "", False, c.project is not None or c.library is not None)[0]:
+            if imgui.menu_item("New map...", "", False, c.project is not None)[0]:
                 self.show_new_map = True
             imgui.separator()
             if c.document:
                 for record_id, label in self.gameplay_templates():
                     if imgui.menu_item(label, "", False)[0]:
                         self.try_placement("marker", record_id)
+                imgui.separator()
+                if imgui.menu_item("Prefabs...", "", False)[0]:
+                    self.open_gameplay("Prefabs")
             else:
                 imgui.text_disabled("Open a map to place gameplay objects")
             imgui.end_menu()
         if imgui.begin_menu("Tools"):
-            imgui.text("Gizmo")
-            for mode in ("translate", "rotate", "scale"):
-                if imgui.radio_button(mode.capitalize(), self.gizmo_operation == mode):
-                    self.gizmo_operation = mode
-                imgui.same_line()
-            imgui.new_line()
-            _, prefs.gizmo_local = imgui.checkbox("Local orientation", prefs.gizmo_local)
+            keys = validate_bindings(prefs.bindings)
+            for tool, label, _, _ in (("select", "Select", "", ""), ("translate", "Move", "", ""), ("rotate", "Rotate", "", ""), ("scale", "Scale", "", "")):
+                if imgui.menu_item(f"{label} tool", keys[{"select": "gizmo_select", "translate": "gizmo_translate", "rotate": "gizmo_rotate",
+                                                           "scale": "gizmo_scale"}[tool]], self.gizmo_operation == tool)[0]:
+                    self.gizmo_operation = tool
+            _, prefs.gizmo_local = imgui.menu_item("Handles follow object rotation", "", prefs.gizmo_local)
             imgui.separator()
             imgui.text("Snapping")
             _, prefs.surface_snap = imgui.checkbox("Snap to surface", prefs.surface_snap)
+            if imgui.is_item_hovered():
+                imgui.set_tooltip("New objects sit on whatever surface is under the cursor instead of at ground level.")
             _, prefs.grid_snap = imgui.input_float("Grid (0 = off)", prefs.grid_snap, 8.0, 64.0)
+            if imgui.is_item_hovered():
+                imgui.set_tooltip("Positions round to multiples of this many units while placing and moving.")
             prefs.grid_snap = max(0.0, prefs.grid_snap)
             for degrees in g.YAW_SNAP_DEGREES:
-                if imgui.radio_button(f"{degrees}°##yaw" if degrees else "Yaw off", prefs.yaw_snap_degrees == degrees):
+                if imgui.radio_button(f"{degrees}°##yaw" if degrees else "Angle off", prefs.yaw_snap_degrees == degrees):
                     prefs.yaw_snap_degrees = degrees
                 imgui.same_line()
             imgui.new_line()
             imgui.separator()
+            if imgui.menu_item("Gameplay editor...", "", False, c.project is not None)[0]:
+                self.show_gameplay = True
             if imgui.menu_item("Controls and camera...", "", False)[0]:
                 self.show_controls = True
-            _, prefs.autosave_enabled = imgui.checkbox("Autosave recovery copy", prefs.autosave_enabled)
-            _, prefs.autosave_seconds = imgui.input_int("Autosave interval (s)", prefs.autosave_seconds)
-            prefs.autosave_seconds = max(15, prefs.autosave_seconds)
+            if imgui.menu_item("Settings...", "", False)[0]:
+                self.show_settings = True
             imgui.end_menu()
         if imgui.begin_menu("Help"):
-            imgui.text(f"BattleTanx Studio {__version__}")
-            keys = validate_bindings(prefs.bindings)
-            imgui.text_disabled(f"Right mouse: look   {keys['forward']}{keys['left']}{keys['back']}{keys['right']}: move   "
-                                f"{keys['down']}/{keys['up']}: down/up   Shift: faster   Wheel: speed")
-            imgui.text_disabled(f"Click: select   Ctrl+click: toggle   Drag: box select   {keys['frame_selection']}: focus   {keys['frame_map']}: map")
-            imgui.text_disabled(f"{keys['gizmo_translate']}/{keys['gizmo_rotate']}/{keys['gizmo_scale']}: move/rotate/scale gizmo   "
-                                "Shift+drag gizmo: duplicate   Esc: cancel")
-            imgui.text_disabled(f"{keys['hide']}: hide   {keys['isolate']}: isolate   {keys['unhide_all']}: unhide all   {keys['lock']}: lock")
-            imgui.text_disabled("Projects are non-destructive; no ROM or disc is modified.")
+            for number, (title, _) in enumerate(HELP_TOPICS):
+                if imgui.menu_item(title, "F1" if number == 0 else "", False)[0]:
+                    self.open_help(number)
+            imgui.separator()
+            if imgui.menu_item("Guided tour", "", False)[0]:
+                self.start_tour()
+            imgui.separator()
+            if imgui.menu_item("Report a problem...", "", False)[0]:
+                self.attempt("Report a problem", self.report_problem)
+            if imgui.menu_item("Open logs folder", "", False)[0]:
+                self.safe_desktop(desktop.open_folder, self.settings.logs_directory)
+            if imgui.menu_item("Check for updates (Releases page)", "", False)[0]:
+                self.safe_desktop(desktop.open_url, desktop.RELEASES_URL)
+            imgui.separator()
+            if imgui.menu_item("About BattleTanx Studio", "", False)[0]:
+                self.show_about = True
             imgui.end_menu()
 
     def request(self, action: str, argument=None) -> None:
         """Actions that may discard unsaved work go through the unsaved-changes prompt."""
 
-        if self.controller.dirty and action in ("new_project", "open_project", "open_path", "exit"):
+        if self.controller.dirty and action in ("new_project", "open_project", "open_path", "open_example", "exit"):
             self.pending_open = (action, argument)
             self.confirm_close = True
             return
@@ -308,46 +394,78 @@ class StudioApp:
 
     def perform(self, action: str, argument=None) -> None:
         if action == "new_project":
-            self.show_new_project = True
+            self.open_wizard()
         elif action == "open_project":
-            files = pfd.open_file("Open BattleTanx Studio project", "", PROJECT_FILTER).result()
-            if files:
-                self.open_project(Path(files[0]))
+            chosen = self.dialogs.open_file("Open a BattleTanx Studio project", PROJECT_FILTER)
+            if chosen:
+                self.open_project(chosen)
         elif action == "open_path":
             self.open_project(Path(argument))
+        elif action == "open_example":
+            self.open_example()
         elif action == "exit":
             runner = self.runner()
             if runner is not None:
                 runner.app_shall_exit = True
 
-    def save(self, ask: bool = False) -> None:
+    def save(self, ask: bool = False) -> bool:
         c = self.controller
+        if c.project is None:
+            return False
         path = c.project_path
         if ask or path is None:
-            chosen = pfd.save_file("Save BattleTanx Studio project", "untitled.btgaproj", PROJECT_FILTER).result()
+            default = hub.unique_path(self.settings.projects_directory, c.project.project.get("title") or "Untitled")
+            chosen = self.dialogs.save_file("Save BattleTanx Studio project", default, PROJECT_FILTER)
             if not chosen:
-                return
-            path = Path(chosen if chosen.endswith(".btgaproj") else chosen + ".btgaproj")
-        self.guarded("save", c.save, path)
+                return False
+            path = chosen if chosen.suffix == ".btgaproj" else chosen.with_name(chosen.name + ".btgaproj")
+        try:
+            c.save(path)
+            self.save_count += 1
+        except (EditError, projects.ProjectError, OSError, ValueError) as error:
+            self.report_error("The project was not saved", f"{error}\n\nThe file on disk was not changed. Try Save as... to another folder.",
+                              traceback.format_exc())
+            return False
+        self.hub_refresh = True
+        return True
 
     def export_package(self) -> None:
-        from tools.btga_studio.core.package import PackageError, validate_for_export, write_package
+        from tools.btga_studio.core.package import read_package, validate_for_export
 
         c = self.controller
-        report = validate_for_export(c.project, c.library)
-        for item in report.errors:
-            c.log("error", f"export blocked: [{item['map'] or 'project'}] {item['target']}{'.' + item['field'] if item['field'] else ''}: {item['message']}")
-        if not report.ok:
+        if c.project is None:
             return
-        chosen = pfd.save_file("Export content package", "content.btgapkg", PACKAGE_FILTER).result()
+        report = validate_for_export(c.project, c.library)
+        if not report.ok:
+            first = report.errors[0]
+            maps = c.project.maps
+            lines = [friendly_ids(f"- {e['message']} (map \"{maps[e['map']].title if e['map'] in maps else 'project'}\": "
+                                  f"{e['target']}{', field ' + e['field'] if e['field'] else ''})") for e in report.errors[:8]]
+            actions = ()
+            if c.document is not None and first.get("map") and c.document.scene.record(first["target"] or ""):
+                actions = (("Show the first problem", lambda: c.frame_record(first["target"])),)
+            elif first.get("map") and first["map"] in c.project.maps:
+                actions = (("Open its map", lambda: self.switch_map(first["map"])),)
+            self.report_error(f"Export stopped: {len(report.errors)} problem(s) to fix", "\n".join(lines), actions=actions)
+            return
+        default = (c.project_path.parent if c.project_path else self.settings.projects_directory) / (hub.safe_file_stem(c.project.project["title"]) + ".btgapkg")
+        chosen = self.dialogs.save_file("Export content package", default, PACKAGE_FILTER)
         if not chosen:
             return
-        path = Path(chosen if chosen.endswith(".btgapkg") else chosen + ".btgapkg")
-        try:
-            write_package(path, c.project, c.library, __version__)
-            c.log("info", f"content package written: {path.name}")
-        except (PackageError, OSError) as error:
-            c.log("error", f"export failed: {error}")
+        path = chosen if chosen.suffix == ".btgapkg" else chosen.with_name(chosen.name + ".btgapkg")
+
+        def done(job):
+            if job.state == "done":
+                data = Path(job.result).read_bytes()
+                package = read_package(data)
+                self.export_result = {"path": str(job.result), "name": Path(job.result).name, "size": len(data), "maps": len(package.maps)}
+                self.export_count += 1
+                c.log("info", f"content package written: {Path(job.result).name}")
+            elif job.state == "failed":
+                self.report_error("Export failed", f"{job.error}\n\nNo partial file was left behind.",
+                                  actions=(("Try again", lambda: c.jobs.retry(job)),))
+
+        self.attempt("Export", c.export_package, path, __version__, done)
 
     def gameplay_templates(self) -> list[tuple[str, str]]:
         index = self.controller.index
@@ -374,45 +492,58 @@ class StudioApp:
 
     # -- wizards and floating windows ---------------------------------------------------
     def window_new_project(self) -> None:
+        """Start a project from a map in a game the user registered (the "Import From My Games" path)."""
+
+        self.bring_to_front("import", self.show_new_project)
         if not self.show_new_project:
             return
         c = self.controller
-        imgui.set_next_window_size(imgui.ImVec2(520, 0), imgui.Cond_.appearing)
-        opened, self.show_new_project = imgui.begin("New project", self.show_new_project)
+        imgui.set_next_window_size(imgui.ImVec2(640, 0), imgui.Cond_.appearing)
+        opened, self.show_new_project = imgui.begin("New project from my games###import", self.show_new_project, imgui.WindowFlags_.no_docking)
         if opened:
             w = self.wizard
-            _, w["title"] = imgui.input_text("Title", w["title"])
-            targets = list(projects.TARGET_GAMES)
-            _, w["target"] = imgui.combo("Target game", w["target"], [GAMES.get(t, t) if t != "studio" else "Studio (original content)" for t in targets])
-            imgui.separator()
-            imgui.text("First map")
-            self.map_choice_widgets()
-            if imgui.button("Create"):
-                if self.guarded("new project", c.new_studio_project, w["title"], targets[w["target"]]) and self.create_map_from_wizard():
+            w["map_kind"] = 1
+            _, w["title"] = imgui.input_text("Project name", w["title"])
+            imgui.text("Choose the map to start from")
+            self.map_choice_widgets(allow_blank=False)
+            imgui.text_disabled(f"Saved to {self.settings.projects_directory.name}; game content stays referenced, never copied.")
+            if imgui.button("Create project"):
+                platform = (w.get("_shown") or [None])[min(w["scene"], len(w.get("_shown") or [None]) - 1)]
+                target = platform.platform if platform is not None and platform.platform in projects.TARGET_GAMES else "studio"
+                if self.guarded("new project", c.new_studio_project, w["title"], target) and self.create_map_from_wizard():
+                    self.save_new_project()
                     self.show_new_project = False
             imgui.same_line()
-            if imgui.button("Open the starter example"):
-                self.open_example()
-                self.show_new_project = False
+            if imgui.button("Source Manager..."):
+                self.show_sources = True
         imgui.end()
 
-    def map_choice_widgets(self) -> None:
+    def save_new_project(self) -> None:
+        c = self.controller
+        if c.project is not None and c.project_path is None:
+            self.attempt("Save", c.save, hub.unique_path(self.settings.projects_directory, c.project.project["title"]))
+
+    def map_choice_widgets(self, allow_blank: bool = True) -> None:
         w = self.wizard
         c = self.controller
-        if imgui.radio_button("Blank map", w["map_kind"] == 0):
-            w["map_kind"] = 0
-        imgui.same_line()
-        if imgui.radio_button("Import an existing map", w["map_kind"] == 1):
-            w["map_kind"] = 1
-        _, w["key"] = imgui.input_text("Map key (a-z, 0-9, _)", w["key"])
-        _, w["map_title"] = imgui.input_text("Map title", w["map_title"])
+        if allow_blank:
+            if imgui.radio_button("Original map", w["map_kind"] == 0):
+                w["map_kind"] = 0
+            imgui.same_line()
+            if imgui.radio_button("Map from my games", w["map_kind"] == 1):
+                w["map_kind"] = 1
+        _, w["map_title"] = imgui.input_text("Map name", w["map_title"])
         if w["map_kind"] == 0:
-            _, w["size"] = imgui.input_float("Half-extent (units)", w["size"], 256.0, 1024.0)
+            sizes = list(hub.MAP_SIZES.values())
+            current = sizes.index(w["size"]) if w["size"] in sizes else 1
+            _, current = imgui.combo("Map size", current, list(hub.MAP_SIZES))
+            w["size"] = sizes[current]
         else:
             levels = [l for l in (c.library.levels() if c.library else []) if l.platform != "studio"]
             if not levels:
-                imgui.text_wrapped("No game maps are loaded. Register a source in File > Source manager and build its catalog first.")
-            _, w["scene_filter"] = imgui.input_text("Filter maps", w["scene_filter"])
+                imgui.text_wrapped("No maps from your games are available yet. Add your game in the Source Manager and build its "
+                                   "catalog first.")
+            _, w["scene_filter"] = imgui.input_text("Search maps", w["scene_filter"])
             needle = w["scene_filter"].lower()
             shown = [l for l in levels if needle in f"{l.name} {l.platform} {l.campaign}".lower()]
             if imgui.begin_list_box("##scenes", imgui.ImVec2(-1, 160)):
@@ -422,18 +553,32 @@ class StudioApp:
                 imgui.end_list_box()
             w["_shown"] = shown
 
+    def _map_key(self) -> str:
+        """The wizard's explicit key when valid and unused, otherwise one derived from the map name (users never type keys)."""
+
+        existing = set(self.controller.project.maps) if self.controller.project else set()
+        explicit = self.wizard.get("key")
+        if explicit and projects.KEY.match(explicit) and explicit not in existing and explicit != "map_1":
+            return explicit
+        base = hub.slug(self.wizard.get("map_title") or "map")
+        key, number = base, 2
+        while key in existing:
+            key, number = f"{base[:40]}_{number}", number + 1
+        return key
+
     def create_map_from_wizard(self) -> bool:
         w = self.wizard
         c = self.controller
+        key = self._map_key()
         if w["map_kind"] == 0:
-            ok = self.guarded("new map", c.add_blank_map, w["key"], w["map_title"], float(w["size"]))
+            ok = self.guarded("new map", c.add_blank_map, key, w["map_title"], float(w["size"]))
         else:
             shown = w.get("_shown") or []
             if not shown:
-                c.log("error", "choose a map to import")
+                self.report_error("Choose a map first", "Pick a map from the list. If the list is empty, add your game in the Source Manager.")
                 return False
             level = shown[min(w["scene"], len(shown) - 1)]
-            ok = self.guarded("import map", c.add_imported_map, w["key"], level.id, w["map_title"] or level.name)
+            ok = self.guarded("import map", c.add_imported_map, key, level.id, w["map_title"] or level.name)
         if ok:
             self._load_into_renderer()
         return ok
@@ -457,140 +602,6 @@ class StudioApp:
                     self.controller.new_studio_project(self.wizard["map_title"])
                 if self.create_map_from_wizard():
                     self.show_new_map = False
-        imgui.end()
-
-    def window_definitions(self) -> None:
-        if not self.show_definitions:
-            return
-        c = self.controller
-        opened, self.show_definitions = imgui.begin("Project definitions", self.show_definitions)
-        if opened and c.project is None:
-            imgui.text_disabled("No project open")
-        elif opened:
-            project = c.project
-            info = project.project
-            changed, title = imgui.input_text("Project title", info["title"])
-            if imgui.is_item_deactivated_after_edit():
-                self.guarded("title", lambda: info.__setitem__("title", projects._text(title, "title")))
-            _, info["description"] = imgui.input_text_multiline("Description", info.get("description", ""), imgui.ImVec2(-1, 60))
-            imgui.text(f"Target: {info['target']['game']}  package: {info['target']['package']}")
-            if imgui.collapsing_header("Campaigns"):
-                for campaign in project.campaigns:
-                    imgui.bullet_text(f"{campaign.get('title')} ({campaign.get('id')}): {', '.join(campaign.get('missions', []))}")
-                if imgui.button("Add campaign with all missions"):
-                    project.campaigns.append({"id": f"campaign_{len(project.campaigns) + 1}", "title": "New campaign", "missions": sorted(project.missions)})
-            _, self.definition_family = imgui.combo("Definition type", self.definition_family, list(DEFINITION_FAMILIES))
-            family = DEFINITION_FAMILIES[self.definition_family]
-            table = getattr(project, family)
-            for key in sorted(table):
-                data = table[key]
-                if imgui.tree_node(f"{key}: {data.get('title', '')}##{family}{key}"):
-                    _, data["title"] = imgui.input_text(f"Title##{family}{key}", data.get("title", ""))
-                    if family in ("missions", "multiplayer", "minigames"):
-                        maps = sorted(project.maps)
-                        current = maps.index(data["map"]) if data.get("map") in maps else 0
-                        changed, current = imgui.combo(f"Map##{family}{key}", current, maps)
-                        if maps:
-                            data["map"] = maps[current]
-                    if family == "missions":
-                        imgui.text(f"Objectives: {', '.join(data.get('objectives', [])) or 'none'}")
-                        if c.document and c.document.selection and imgui.button(f"Set objectives to selection##{key}"):
-                            data["objectives"] = list(c.document.selection)
-                    if family == "multiplayer":
-                        _, data["max_players"] = imgui.slider_int(f"Players##{key}", int(data.get("max_players", 4)), 2, 4)
-                    if family == "tanks":
-                        imgui.text(f"Model: {data.get('model')}")
-                        stats = data.setdefault("stats", {"speed": 1.0, "armor": 100, "weapon": "cannon"})
-                        _, stats["speed"] = imgui.slider_float(f"Speed##{key}", float(stats.get("speed", 1.0)), 0.2, 3.0)
-                        _, stats["armor"] = imgui.slider_int(f"Armor##{key}", int(stats.get("armor", 100)), 10, 400)
-                    if family == "gangs":
-                        imgui.text(f"Tanks: {', '.join(data.get('tanks', [])) or 'none'}")
-                        for tank in sorted(project.tanks):
-                            on = tank in data.get("tanks", [])
-                            changed, on = imgui.checkbox(f"{tank}##{key}", on)
-                            if changed:
-                                data["tanks"] = sorted(set(data.get("tanks", [])) ^ {tank})
-                    if imgui.button(f"Remove##{family}{key}"):
-                        del table[key]
-                    imgui.tree_pop()
-            _, self.definition_key = imgui.input_text("New key", self.definition_key)
-            imgui.same_line()
-            if imgui.button(f"Add {family[:-1] if family.endswith('s') else family}"):
-                default = {"title": self.definition_key.replace("_", " ").title()}
-                if family in ("missions", "multiplayer", "minigames"):
-                    default["map"] = c.active_map or (sorted(project.maps)[0] if project.maps else None)
-                if family == "tanks":
-                    starter = (c.library.starter() or {}).get("models", {})
-                    default["model"] = starter.get("tank_placeholder")
-                self.guarded("definition", project.define, family, self.definition_key, default)
-        imgui.end()
-
-    def window_sources(self) -> None:
-        if not self.show_sources:
-            return
-        c = self.controller
-        imgui.set_next_window_size(imgui.ImVec2(860, 320), imgui.Cond_.appearing)
-        opened, self.show_sources = imgui.begin("Source manager", self.show_sources)
-        if opened:
-            imgui.text_wrapped("Register game files you legally own. Studio stores only a local reference and hashes, builds catalogs into "
-                               "your data folder, and never copies sources into a project or package.")
-            if imgui.button("Add ROM or disc image..."):
-                files = pfd.open_file("Add a BattleTanx source", "", SOURCE_FILTER).result()
-                for path in files or []:
-                    c.add_source(Path(path))
-            imgui.same_line()
-            if imgui.button("Add extracted PS1 folder..."):
-                folder = pfd.select_folder("Folder holding SLUS_010.44").result()
-                if folder:
-                    c.add_source(Path(folder))
-            imgui.same_line()
-            if imgui.button("Verify all"):
-                for source_id in list(c.registry.sources):
-                    c.registry.verify(source_id)
-            imgui.same_line()
-            if imgui.button("Search folder for missing..."):
-                folder = pfd.select_folder("Search for moved sources").result()
-                if folder:
-                    for source_id, path in c.registry.search(Path(folder)).items():
-                        self.guarded("relocate", c.registry.relocate, source_id, path)
-            if imgui.begin_table("sources", 5, imgui.TableFlags_.row_bg | imgui.TableFlags_.borders_inner_v | imgui.TableFlags_.resizable):
-                for heading in ("Source", "Status", "Detail", "Catalog", "Actions"):
-                    imgui.table_setup_column(heading)
-                imgui.table_headers_row()
-                for source in sorted(c.registry.sources.values(), key=lambda s: s.id):
-                    imgui.table_next_row()
-                    imgui.table_next_column()
-                    imgui.text(source.title)
-                    if imgui.is_item_hovered():
-                        imgui.set_tooltip(f"{source.path}\nSHA-256 {source.sha256}")
-                    imgui.table_next_column()
-                    imgui.text_colored(imgui.ImVec4(*STATUS_COLOURS.get(source.status, (1, 1, 1, 1))), source.status)
-                    imgui.table_next_column()
-                    imgui.text_wrapped(source.detail)
-                    imgui.table_next_column()
-                    job = c.builds.get(source.id)
-                    if job:
-                        imgui.progress_bar(job.fraction, imgui.ImVec2(-1, 0), f"{job.stage} {job.done}/{job.total}")
-                    else:
-                        imgui.text("built" if source.catalog else "not built")
-                    imgui.table_next_column()
-                    if job:
-                        if imgui.small_button(f"Cancel##{source.id}"):
-                            job.cancel.set()
-                    else:
-                        if imgui.small_button(f"Build catalog##{source.id}") and source.status == "supported":
-                            c.build_catalog(source.id)
-                        imgui.same_line()
-                        if imgui.small_button(f"Relocate##{source.id}"):
-                            files = pfd.open_file("Locate the moved source", "", SOURCE_FILTER).result()
-                            if files:
-                                self.guarded("relocate", c.registry.relocate, source.id, Path(files[0]))
-                        imgui.same_line()
-                        if imgui.small_button(f"Remove##{source.id}"):
-                            c.registry.remove(source.id)
-                            c.refresh_library()
-                            self.attach_library()
-                imgui.end_table()
         imgui.end()
 
     def window_controls(self) -> None:
@@ -652,31 +663,43 @@ class StudioApp:
         project = c.project
         if project is None:
             imgui.text_wrapped("No project open.")
-            if imgui.button("New project..."):
+            if imgui.button("Create Original Project"):
                 self.request("new_project")
-            if imgui.button("Open the starter example"):
-                self.open_example()
-            if imgui.button("Source manager..."):
+            if imgui.button("Open Existing Project"):
+                self.request("open_project")
+            if imgui.button("Open Example Project"):
+                self.request("open_example")
+            if imgui.button("Source Manager"):
                 self.show_sources = True
         else:
-            imgui.text(project.project["title"] + (" *" if c.dirty else ""))
+            imgui.text(project.project["title"])
+            imgui.text_colored(imgui.ImVec4(1, 0.78, 0.3, 1) if c.dirty else imgui.ImVec4(0.45, 0.9, 0.45, 1),
+                               "Unsaved changes" if c.dirty else "Saved")
             if imgui.collapsing_header("Maps", imgui.TreeNodeFlags_.default_open):
                 for key, entry in sorted(project.maps.items()):
-                    label = f"{entry.title} [{entry.kind}]##{key}"
+                    label = f"{entry.title}{'' if entry.kind == 'blank' else '  (from your game)'}##{key}"
                     if imgui.selectable(label, key == c.active_map)[0] and key != c.active_map:
                         self.switch_map(key)
                 if imgui.small_button("New map..."):
                     self.show_new_map = True
-            if imgui.collapsing_header("Definitions"):
-                for family in DEFINITION_FAMILIES:
-                    imgui.text(f"{family}: {len(getattr(project, family))}")
-                imgui.text(f"campaigns: {len(project.campaigns)}")
-                if imgui.small_button("Edit definitions..."):
-                    self.show_definitions = True
+            if imgui.collapsing_header("Gameplay", imgui.TreeNodeFlags_.default_open):
+                for family, tab in (("missions", "Missions & campaigns"), ("multiplayer", "Multiplayer"), ("minigames", "Minigames"),
+                                    ("tanks", "Tanks & gangs"), ("gangs", "Tanks & gangs")):
+                    if imgui.selectable(f"{family.capitalize()}: {len(getattr(project, family))}##gp{family}", False)[0]:
+                        self.open_gameplay(tab)
+                if imgui.selectable(f"Campaigns: {len(project.campaigns)}##gpcampaigns", False)[0]:
+                    self.open_gameplay("Missions & campaigns")
+                if imgui.small_button("Open gameplay editor..."):
+                    self.show_gameplay = True
+                self.anchor("gameplay.open")
         if imgui.collapsing_header("Layers", imgui.TreeNodeFlags_.default_open):
             prefs = self.settings.preferences
-            for layer in ("geometry", "collision", "markers", "navigation", "bounds", "minimap", "unresolved", "grid"):
-                _, prefs.layers[layer] = imgui.checkbox(layer.capitalize(), prefs.layers.get(layer, True))
+            for layer, label in (("geometry", "Models and terrain"), ("collision", "Collision"), ("markers", "Gameplay objects"),
+                                 ("navigation", "Navigation"), ("bounds", "Map bounds"), ("minimap", "Minimap area"),
+                                 ("unresolved", "Unresolved records"), ("grid", "Grid")):
+                _, prefs.layers[layer] = imgui.checkbox(label, prefs.layers.get(layer, True))
+                if imgui.is_item_hovered(imgui.HoveredFlags_.delay_short):
+                    imgui.set_tooltip(LAYER_HELP[layer])
             _, prefs.wireframe = imgui.checkbox("Wireframe", prefs.wireframe)
         doc = c.document
         if doc and imgui.collapsing_header("Outline"):
@@ -690,23 +713,42 @@ class StudioApp:
                     family, record = rows[i]
                     record_id = record["id"]
                     hidden, locked = record_id in doc.hidden, record_id in doc.locked
-                    if imgui.small_button(f"{'show' if hidden else 'hide'}##h{record_id}"):
+                    if imgui.small_button(f"{'Show' if hidden else 'Hide'}##h{record_id}"):
                         (doc.hidden.discard if hidden else doc.hidden.add)(record_id)
                     imgui.same_line()
-                    if imgui.small_button(f"{'unlock' if locked else 'lock'}##l{record_id}"):
+                    if imgui.small_button(f"{'Unlock' if locked else 'Lock'}##l{record_id}"):
                         (doc.locked.discard if locked else doc.locked.add)(record_id)
                     imgui.same_line()
-                    label = f"{family[:4]} {record.get('category', record.get('shape', ''))} {record_id.rsplit(':', 2)[-2:]}##{record_id}"
+                    kind = {"instances": "model", "markers": str(record.get("category", "object")).replace("_", " "),
+                            "collision": "collision"}.get(family, family)
+                    label = f"{kind} {record_id.rsplit(':', 1)[-1]}##{record_id}"
                     if imgui.selectable(label, record_id in doc.selection)[0] and not hidden and not locked:
                         c.frame_record(record_id)
+                    if imgui.begin_popup_context_item(f"outline-menu-{record_id}"):
+                        self.record_context_menu(record_id if not hidden and not locked else None)
+                        imgui.end_popup()
 
     def panel_viewport(self) -> None:
         c = self.controller
+        if c.document is None or self.renderer is None:
+            imgui.spacing()
+            imgui.text_wrapped("No map is open." if c.project is None else "Choose a map in the Project panel on the left.")
+            if c.project is None:
+                if imgui.button("Create Original Project"):
+                    self.request("new_project")
+                imgui.same_line()
+                if imgui.button("Open Existing Project"):
+                    self.request("open_project")
+                imgui.same_line()
+                if imgui.button("Open Example Project"):
+                    self.request("open_example")
+                imgui.same_line()
+                if imgui.button("Project Hub"):
+                    self.open_hub()
+            return
+        self.toolbar()
         avail = imgui.get_content_region_avail()
         width, height = max(16, int(avail.x)), max(16, int(avail.y))
-        if c.document is None or self.renderer is None:
-            imgui.text_wrapped("Create a project (File > New project) or open the starter example, then pick a map.")
-            return
         c.viewport = (width, height)
         prefs = self.settings.preferences
         self.renderer.wireframe = prefs.wireframe
@@ -717,6 +759,7 @@ class StudioApp:
         origin = imgui.get_cursor_screen_pos()
         self.viewport_origin = (origin.x, origin.y)
         imgui.image(imgui.ImTextureRef(texture), imgui.ImVec2(width, height), imgui.ImVec2(0, 1), imgui.ImVec2(1, 0))
+        self.anchor("viewport")
         hovered = imgui.is_item_hovered()
         io = imgui.get_io()
         mouse = (io.mouse_pos.x - origin.x, io.mouse_pos.y - origin.y)
@@ -734,6 +777,18 @@ class StudioApp:
             c.hover(*mouse)
         if imgui.is_mouse_clicked(imgui.MouseButton_.right) and hovered:
             self.right_drag = True
+            self.right_press, self.right_travel = mouse, 0.0
+        if self.right_press is not None:
+            self.right_travel += abs(io.mouse_delta.x) + abs(io.mouse_delta.y)
+            if imgui.is_mouse_released(imgui.MouseButton_.right):
+                if self.right_travel < 4 and hovered and c.placement is None:  # a click, not a look-around drag
+                    hits = c.pick(*mouse)
+                    self.context_record = hits[0].id if hits else None
+                    imgui.open_popup("viewport-menu")
+                self.right_press = None
+        if imgui.begin_popup("viewport-menu"):
+            self.record_context_menu(self.context_record)
+            imgui.end_popup()
         if not imgui.is_mouse_down(imgui.MouseButton_.right):
             self.right_drag = False
         if imgui.is_mouse_clicked(imgui.MouseButton_.left) and hovered and not gizmo.is_over():
@@ -793,7 +848,7 @@ class StudioApp:
 
     def draw_gizmo(self, origin, width: int, height: int) -> bool:
         c = self.controller
-        matrix = c.gizmo_matrix()
+        matrix = c.gizmo_matrix() if self.gizmo_operation != "select" else None
         if matrix is None:
             if self.gizmo_was_using:
                 c.gizmo_end()
@@ -828,22 +883,22 @@ class StudioApp:
         entry = c.project.maps[c.active_map] if c.project else None
         if not doc.selection:
             imgui.text_disabled("Nothing selected.")
-            if entry is not None and imgui.collapsing_header("Map settings", imgui.TreeNodeFlags_.default_open):
-                imgui.text(f"{entry.title} [{entry.kind}]  key {entry.key}")
+            if entry is not None and imgui.collapsing_header("This map", imgui.TreeNodeFlags_.default_open):
+                imgui.text(entry.title)
+                imgui.text_disabled("Original map" if entry.kind == "blank" else "Map from your game (size and sky come from the game)")
                 bounds = doc.scene.bounds
                 if bounds:
-                    imgui.text(f"Limits x {bounds['x']}  z {bounds['z']}")
+                    imgui.text(f"Playable area: {bounds['x'][1] - bounds['x'][0]:.0f} x {bounds['z'][1] - bounds['z'][0]:.0f} units")
                 if entry.kind == "blank":
-                    half = float(bounds["x"][1]) if bounds else 2048.0
-                    changed, half = imgui.input_float("Half-extent", half, 256.0, 1024.0)
-                    if imgui.is_item_deactivated_after_edit():
-                        self.guarded("map settings", c.project.set_map_settings, entry.key, half)
                     colour = [v / 255 for v in doc.scene.base["environment"][0]["clear_and_fog_colour"]]
-                    changed, colour = imgui.color_edit3("Fog / background", colour)
+                    changed, colour = imgui.color_edit3("Sky colour", colour)
                     if changed:
                         self.guarded("map settings", c.project.set_map_settings, entry.key, None, [int(v * 255) for v in colour])
                         if self.renderer:
                             self.renderer.background = tuple(colour)
+                if imgui.small_button("Map size, name and more..."):
+                    self.open_gameplay("Map")
+                imgui.text_disabled("Click an object to edit it here.")
             env = doc.scene.base.get("environment", [])
             if env and entry is not None and entry.kind == "imported" and imgui.collapsing_header("Environment / fog / background"):
                 for item in env:
@@ -879,7 +934,9 @@ class StudioApp:
         c = self.controller
         imgui.text(model.title)
         if model.record_id:
-            imgui.text_disabled(model.record_id)
+            imgui.text_disabled(f"Object {model.record_id.rsplit(':', 1)[-1]}")
+            if imgui.is_item_hovered():
+                imgui.set_tooltip(model.record_id)
         if model.read_only_reason:
             imgui.text_colored(imgui.ImVec4(1, 0.6, 0.3, 1), f"Read-only: {model.read_only_reason}")
         for control in model.controls:
@@ -941,7 +998,9 @@ class StudioApp:
                 if changed:
                     self.commit_field(model.record_id, control, int(value))
             elif control.kind == "record":
-                imgui.text(f"{control.label}: {control.value or 'none'}")
+                imgui.text(f"{control.label}: {self.reference_name(control.value)}")
+                if control.value and imgui.is_item_hovered():
+                    imgui.set_tooltip(str(control.value))
                 doc = c.document
                 if control.editable and doc and len(doc.selection) == 1:
                     imgui.same_line()
@@ -952,9 +1011,9 @@ class StudioApp:
                 if control.editable and c.document:
                     candidates = [r["id"] for f, r in c.document.scene.records() if r["id"] != model.record_id]
                     current = candidates.index(control.value) if control.value in candidates else -1
-                    if imgui.begin_combo(f"Target##{key}", control.value or "choose a record"):
+                    if imgui.begin_combo(f"Choose##{key}", self.reference_name(control.value) if control.value else "choose an object"):
                         for candidate in candidates[:500]:
-                            if imgui.selectable(candidate, candidate == control.value)[0]:
+                            if imgui.selectable(f"{self.reference_name(candidate)}##{candidate}", candidate == control.value)[0]:
                                 self.commit_field(model.record_id, control, candidate)
                         imgui.end_combo()
             elif control.kind in ("int", "slot", "float", "text"):
@@ -964,6 +1023,10 @@ class StudioApp:
                 if imgui.is_item_deactivated_after_edit():
                     self.pending_values.pop(key, None)
                     self.commit_field(model.record_id, control, text)
+            elif control.kind == "reference":
+                imgui.text(f"{control.label}: {self.reference_name(control.value)}")
+                if imgui.is_item_hovered():
+                    imgui.set_tooltip(f"{control.value}\n{control.reason or ''}".strip())
             else:
                 imgui.text(f"{control.label}: {control.value}")
             imgui.end_disabled()
@@ -978,9 +1041,28 @@ class StudioApp:
                 imgui.set_tooltip("\n".join(tip))
         if self.field_error:
             imgui.text_colored(imgui.ImVec4(1, 0.35, 0.35, 1), self.field_error)
-        for note in model.notes:
-            if note:
+        notes = [note for note in model.notes if note]
+        if notes and imgui.tree_node(f"Technical details##{model.record_id}"):
+            for note in notes:
                 imgui.text_wrapped(note)
+            imgui.tree_pop()
+
+    def reference_name(self, value) -> str:
+        """A readable name for a model or record ID shown in the inspector (the raw ID stays in the tooltip)."""
+
+        c = self.controller
+        if not value:
+            return "none"
+        model = c.library._models.get(value) if c.library is not None else None
+        if model is not None:
+            return str((model.get("source") or {}).get("label") or model.get("name") or model.get("label") or "model")
+        entry = c.document.scene.record(value) if c.document is not None else None
+        if entry is not None:
+            family, record = entry
+            return f"{str(record.get('category', family)).replace('_', ' ')} {value.rsplit(':', 1)[-1]}"
+        if isinstance(value, str) and value.count(":") >= 2:
+            return f"missing object {value.rsplit(':', 1)[-1]}"
+        return str(value)
 
     def commit_field(self, record_id: str, control: insp.Control, raw) -> None:
         try:
@@ -997,6 +1079,7 @@ class StudioApp:
             imgui.text_disabled("No catalog loaded")
             return
         _, self.search = imgui.input_text("Search", self.search)
+        self.anchor("assets")
         imgui.same_line()
         _, self.map_only = imgui.checkbox("This map", self.map_only)
         imgui.same_line()
@@ -1023,12 +1106,17 @@ class StudioApp:
             if self.thumbnails:
                 self.thumbnails.cancel_older_than(self.browser_generation)
         rows = self.browser_rows
-        imgui.text_disabled(f"{len(rows)} assets   click or drag into the viewport to place")
+        imgui.text_disabled(f"{len(rows)} assets.  Click one, then click in the viewport to place it (or drag it in). Right-click for more."
+                            if c.document else f"{len(rows)} assets.  Open a map to place them.")
         if self.thumbnail_mode:
             self.thumbnail_grid(rows)
             return
-        if imgui.begin_table("assets", 6, imgui.TableFlags_.scroll_y | imgui.TableFlags_.row_bg | imgui.TableFlags_.borders_inner_v | imgui.TableFlags_.resizable):
-            for heading in ("Name", "Kind", "Category", "Game", "Origin", "ID / detail"):
+        if not rows:
+            imgui.text_disabled("Nothing matches. Clear the search box or set the filters to All." if self.search or self.filter_kind
+                                or self.filter_category or self.filter_platform else "No assets are loaded.")
+            return
+        if imgui.begin_table("assets", 5, imgui.TableFlags_.scroll_y | imgui.TableFlags_.row_bg | imgui.TableFlags_.borders_inner_v | imgui.TableFlags_.resizable):
+            for heading in ("Name", "Type", "Category", "From", "Can place?"):
                 imgui.table_setup_column(heading)
             imgui.table_setup_scroll_freeze(0, 1)
             imgui.table_headers_row()
@@ -1043,9 +1131,20 @@ class StudioApp:
                     if imgui.selectable(f"{entry.label}##{entry.id}", False, imgui.SelectableFlags_.span_all_columns)[0]:
                         self.activate_asset(entry)
                     imgui.end_disabled()
+                    if imgui.is_item_hovered(imgui.HoveredFlags_.delay_short | imgui.HoveredFlags_.allow_when_disabled):
+                        imgui.set_tooltip(f"{entry.label}\n{entry.detail or ''}\nID {entry.id}".strip())
                     self.drag_source(entry)
-                    for value in (entry.kind, entry.category, GAMES.get(entry.platform, entry.platform or ""), entry.source,
-                                  f"{entry.id}  {entry.detail}"):
+                    if imgui.begin_popup_context_item(f"asset-menu-{entry.id}"):
+                        if imgui.menu_item("Place in viewport", "", False, entry.editable and entry.kind in ("model", "gameplay") and c.document is not None)[0]:
+                            self.activate_asset(entry)
+                        if imgui.menu_item("Copy ID", "", False)[0]:
+                            imgui.set_clipboard_text(entry.id)
+                        imgui.end_popup()
+                    origin = {"starter": "Studio starter", "user": "Placed in this map", "source": "Your game" if entry.platform != "studio" else "Studio starter"}
+                    placeable = ("Yes" if entry.editable and entry.kind in ("model", "gameplay") else
+                                 ("Read-only: " + (entry.detail or "not decoded") if not entry.editable else "Shown for reference"))
+                    for value in ({"model": "Model", "gameplay": "Gameplay object", "texture": "Texture", "environment": "Environment"}.get(entry.kind, entry.kind),
+                                  entry.category, origin.get(entry.source, entry.source), placeable):
                         imgui.table_next_column()
                         imgui.text(str(value))
             imgui.end_table()
@@ -1121,7 +1220,18 @@ class StudioApp:
     def panel_output(self) -> None:
         c = self.controller
         if imgui.begin_tab_bar("output"):
-            if imgui.begin_tab_item(f"Validation ({len(c.diagnostics)})###validation")[0]:
+            opened_validation = imgui.begin_tab_item(f"Validation ({len(c.diagnostics)})###validation")[0]
+            if opened_validation:
+                if imgui.small_button("Check now"):
+                    c.request_diagnostics(immediate=True)
+                    c.poll_diagnostics(wait=True)
+                    self.validation_checks += 1
+                self.anchor("validation")
+                if imgui.is_item_hovered():
+                    imgui.set_tooltip("Check the open map and the project for problems now (this also happens automatically as you edit).")
+                imgui.same_line()
+                errors = sum(1 for d in c.diagnostics if d.severity == "error")
+                imgui.text_disabled("No problems found." if not c.diagnostics else f"{errors} error(s), {len(c.diagnostics) - errors} warning(s)")
                 if imgui.begin_table("diag", 4, imgui.TableFlags_.scroll_y | imgui.TableFlags_.row_bg | imgui.TableFlags_.resizable):
                     for heading in ("Severity", "Code", "Object . field", "Message"):
                         imgui.table_setup_column(heading)
@@ -1135,9 +1245,11 @@ class StudioApp:
                         if imgui.selectable(f"{item.code}##d{number}", False, imgui.SelectableFlags_.span_all_columns)[0] and item.target:
                             c.frame_record(item.target)
                         imgui.table_next_column()
-                        imgui.text(f"{item.target or '-'}{'.' + item.field if item.field else ''}")
+                        imgui.text(friendly_ids(f"{item.target or '-'}{'.' + item.field if item.field else ''}"))
+                        if item.target and imgui.is_item_hovered():
+                            imgui.set_tooltip(item.target)
                         imgui.table_next_column()
-                        imgui.text(item.message)
+                        imgui.text(friendly_ids(item.message))
                     imgui.end_table()
                 imgui.end_tab_item()
             if imgui.begin_tab_item("Output")[0]:
@@ -1245,7 +1357,29 @@ class StudioApp:
             return None
 
     def show_gui(self) -> None:
+        self.guard("main window", self._show_gui)
+
+    def guard(self, where: str, function) -> None:
+        """Run one part of the frame; an unexpected error is logged and shown once instead of closing the editor."""
+
+        try:
+            function()
+        except Exception as error:  # Dear ImGui error recovery repairs the frame's window/ID stacks
+            self.frame_errors += 1
+            key = f"{where}: {type(error).__name__}: {error}"
+            if key != getattr(self, "_last_frame_error", None):
+                self._last_frame_error = key
+                self.report_error("Something went wrong", f"Studio hit an unexpected problem in the {where} and recovered. "
+                                  "Your project is still open; save your work, then use Help > Report a problem.",
+                                  traceback.format_exc())
+
+    def _show_gui(self) -> None:
         c = self.controller
+        self.previous_anchors, self.anchors = self.anchors, {}
+        if c.project is not getattr(self, "_last_project", None):
+            self._last_project = c.project
+            if c.project is not None:
+                self.show_hub = False  # any way of opening a project leaves the hub
         if self.thumbnails:
             self.thumbnails.pump()
         library_before = c.library
@@ -1263,10 +1397,22 @@ class StudioApp:
         self.title = title
         self.window_new_project()
         self.window_new_map()
-        self.window_definitions()
-        self.window_sources()
+        self.window_source_manager()
+        self.window_hub()
+        self.window_wizard()
+        self.window_gameplay()
+        self.window_settings()
+        self.window_help()
         self.window_controls()
         self.window_recovery()
+        self.window_tutorial()
+        self.window_about()
+        self.window_export()
+        self.window_confirm()
+        self.window_error()
+        io = imgui.get_io()
+        if imgui.is_key_pressed(imgui.Key.f1) and not io.want_text_input:
+            self.open_help(0)
         if self.confirm_close:
             imgui.open_popup("Unsaved changes")
         if imgui.begin_popup_modal("Unsaved changes", None, imgui.WindowFlags_.always_auto_resize)[0]:
@@ -1311,11 +1457,12 @@ def runner_params(app: StudioApp, hidden: bool = False) -> hello_imgui.RunnerPar
     app.settings.directory.mkdir(parents=True, exist_ok=True)
     params.ini_filename = str(app.settings.layout_file)
     params.callbacks.show_menus = app.show_menus
+    params.callbacks.load_additional_fonts = lambda: fonts.load()
     params.callbacks.show_gui = app.show_gui
     params.callbacks.post_init = app.post_init
     params.callbacks.before_exit = app.before_exit
-    params.callbacks.show_status = lambda: imgui.text(
-        f"{len(app.controller.diagnostics)} diagnostics   undo {len(app.controller.document.undo_stack) if app.controller.document else 0}")
+    params.callbacks.show_status = lambda: app.guard("status bar", lambda: imgui.text(app.status_text()))
+    params.callbacks.show_menus = lambda: app.guard("menus", app.show_menus)
     params.fps_idling.enable_idling = True
     splits = [
         hello_imgui.DockingSplit("MainDockSpace", "BottomSpace", imgui.Dir.down, 0.28),
@@ -1328,7 +1475,8 @@ def runner_params(app: StudioApp, hidden: bool = False) -> hello_imgui.RunnerPar
                               ("Inspector", "RightSpace", app.panel_inspector), ("Minimap", "MinimapSpace", app.panel_minimap),
                               ("Assets", "BottomSpace", app.panel_assets), ("Output", "BottomSpace", app.panel_output)):
         window = hello_imgui.DockableWindow()
-        window.label, window.dock_space_name, window.gui_function = label, space, gui
+        window.label, window.dock_space_name = label, space
+        window.gui_function = lambda gui=gui, label=label: app.guard(f"{label} panel", gui)
         windows.append(window)
     params.docking_params.docking_splits = splits
     params.docking_params.dockable_windows = windows
@@ -1370,6 +1518,12 @@ def self_check(report: Path) -> int:
             read = read_package(package)
             controller.request_diagnostics(immediate=True)
             controller.poll_diagnostics(wait=True)
+            from tools.btga_studio.core.settings import bundled_data_directory
+
+            if getattr(sys, "frozen", False):
+                for required in ("800E8380_slot_asset_ranges.c", "build.json"):
+                    if not (bundled_data_directory() / required).is_file():
+                        raise RuntimeError(f"bundled data file {required} is missing")
             shipped = Path(sys.executable).parent / "samples" / "starter-example.btgaproj"
             shipped_ok = None
             if getattr(sys, "frozen", False):  # the packaged example must load and equal a fresh build of it
@@ -1388,15 +1542,51 @@ def self_check(report: Path) -> int:
     return 0 if result["ok"] else 1
 
 
+def run_uninstaller(quiet: bool = False) -> int:
+    """Windows Settings > Apps runs ``BattleTanxStudio.exe --uninstall``: a small confirmation window (or none with ``--quiet``)."""
+
+    from tools.btga_studio.core import installer
+    from tools.btga_studio.core.settings import data_directories
+
+    target = Path(sys.executable).resolve().parent
+    system = installer.WindowsSystem()
+    user_data = tuple(dict.fromkeys(data_directories()))
+
+    def remove(remove_data: bool) -> installer.UninstallResult:
+        return installer.uninstall(target, system, remove_user_data=remove_data, user_data=user_data, running_from_target=True)
+
+    if quiet:
+        try:
+            remove(False)
+            return 0
+        except (installer.InstallError, OSError):
+            return 1
+    from tools.btga_studio.setup.ui import UninstallUI
+
+    ui = UninstallUI(target, system, user_data)
+
+    def gui():
+        ui.draw()
+        if ui.finished:
+            hello_imgui.get_runner_params().app_shall_exit = True
+
+    immapp.run(gui, window_title="Remove BattleTanx Studio", window_size=(640, 300))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="BattleTanxStudio", description="BattleTanx Studio map editor")
     parser.add_argument("--catalog", type=Path, help="extra neutral catalog folder for this session")
     parser.add_argument("--project", type=Path, help="project file to open")
     parser.add_argument("--portable", action="store_true", help="keep settings next to the program")
     parser.add_argument("--self-check", type=Path, metavar="REPORT", help="verify the installation without opening a window; write a JSON report")
+    parser.add_argument("--uninstall", action="store_true", help="remove the per-user installation (used by Windows Settings > Apps)")
+    parser.add_argument("--quiet", action="store_true", help="with --uninstall: no window")
     args = parser.parse_args(argv)
     if args.self_check:
         return self_check(args.self_check)
+    if args.uninstall:
+        return run_uninstaller(args.quiet)
     settings = Settings.open(args.portable)
     app = StudioApp(settings, args.catalog, args.project)
     try:

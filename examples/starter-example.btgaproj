@@ -99,6 +99,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 35,
       "user_index_after": 1,
       "user_index_before": 0
      },
@@ -108,6 +109,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 36,
       "user_index_after": 2,
       "user_index_before": 1
      },
@@ -117,6 +119,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 37,
       "user_index_after": 3,
       "user_index_before": 2
      },
@@ -126,6 +129,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 38,
       "user_index_after": 4,
       "user_index_before": 3
      },
@@ -135,6 +139,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 39,
       "user_index_after": 5,
       "user_index_before": 4
      },
@@ -144,6 +149,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 40,
       "user_index_after": 6,
       "user_index_before": 5
      },
@@ -153,6 +159,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 41,
       "user_index_after": 7,
       "user_index_before": 6
      },
@@ -162,6 +169,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 42,
       "user_index_after": 8,
       "user_index_before": 7
      },
@@ -171,6 +179,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 43,
       "user_index_after": 9,
       "user_index_before": 8
      },
@@ -180,6 +189,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 44,
       "user_index_after": 10,
       "user_index_before": 9
      },
@@ -189,6 +199,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 45,
       "user_index_after": 11,
       "user_index_before": 10
      },
@@ -198,6 +209,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 46,
       "user_index_after": 12,
       "user_index_before": 11
      },
@@ -207,6 +219,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 47,
       "user_index_after": 13,
       "user_index_before": 12
      },
@@ -216,6 +229,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 48,
       "user_index_after": 14,
       "user_index_before": 13
      },
@@ -225,6 +239,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 49,
       "user_index_after": 15,
       "user_index_before": 14
      },
@@ -234,6 +249,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 50,
       "user_index_after": 16,
       "user_index_before": 15
      },
@@ -243,6 +259,7 @@
       ],
       "edits": 1,
       "label": "Place team_start",
+      "sequence": 51,
       "user_index_after": 17,
       "user_index_before": 16
      },
@@ -252,6 +269,7 @@
       ],
       "edits": 1,
       "label": "Place team_start",
+      "sequence": 52,
       "user_index_after": 18,
       "user_index_before": 17
      },
@@ -261,6 +279,7 @@
       ],
       "edits": 1,
       "label": "Place team_start",
+      "sequence": 53,
       "user_index_after": 19,
       "user_index_before": 18
      },
@@ -270,6 +289,7 @@
       ],
       "edits": 1,
       "label": "Place team_start",
+      "sequence": 54,
       "user_index_after": 20,
       "user_index_before": 19
      },
@@ -279,6 +299,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 55,
       "user_index_after": 21,
       "user_index_before": 20
      },
@@ -288,6 +309,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 56,
       "user_index_after": 22,
       "user_index_before": 21
      },
@@ -297,6 +319,7 @@
       ],
       "edits": 1,
       "label": "Place pickup",
+      "sequence": 57,
       "user_index_after": 23,
       "user_index_before": 22
      }
@@ -962,6 +985,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 58,
       "user_index_after": 1,
       "user_index_before": 0
      },
@@ -971,6 +995,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 59,
       "user_index_after": 2,
       "user_index_before": 1
      },
@@ -980,6 +1005,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 60,
       "user_index_after": 3,
       "user_index_before": 2
      },
@@ -989,6 +1015,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 61,
       "user_index_after": 4,
       "user_index_before": 3
      },
@@ -998,6 +1025,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 62,
       "user_index_after": 5,
       "user_index_before": 4
      },
@@ -1007,6 +1035,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 63,
       "user_index_after": 6,
       "user_index_before": 5
      },
@@ -1016,6 +1045,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 64,
       "user_index_after": 7,
       "user_index_before": 6
      },
@@ -1025,6 +1055,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 65,
       "user_index_after": 8,
       "user_index_before": 7
      },
@@ -1034,6 +1065,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 66,
       "user_index_after": 9,
       "user_index_before": 8
      },
@@ -1043,6 +1075,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 67,
       "user_index_after": 10,
       "user_index_before": 9
      },
@@ -1052,6 +1085,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 68,
       "user_index_after": 11,
       "user_index_before": 10
      },
@@ -1061,6 +1095,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 69,
       "user_index_after": 12,
       "user_index_before": 11
      },
@@ -1070,6 +1105,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 70,
       "user_index_after": 13,
       "user_index_before": 12
      },
@@ -1079,6 +1115,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 71,
       "user_index_after": 14,
       "user_index_before": 13
      },
@@ -1088,6 +1125,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 72,
       "user_index_after": 15,
       "user_index_before": 14
      },
@@ -1097,6 +1135,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 73,
       "user_index_after": 16,
       "user_index_before": 15
      },
@@ -1106,6 +1145,7 @@
       ],
       "edits": 1,
       "label": "Place player_spawn",
+      "sequence": 74,
       "user_index_after": 17,
       "user_index_before": 16
      },
@@ -1115,6 +1155,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 75,
       "user_index_after": 18,
       "user_index_before": 17
      },
@@ -1124,6 +1165,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 76,
       "user_index_after": 19,
       "user_index_before": 18
      },
@@ -1133,6 +1175,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 77,
       "user_index_after": 20,
       "user_index_before": 19
      },
@@ -1142,6 +1185,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 78,
       "user_index_after": 21,
       "user_index_before": 20
      },
@@ -1151,6 +1195,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 79,
       "user_index_after": 22,
       "user_index_before": 21
      }
@@ -1656,6 +1701,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 1,
       "user_index_after": 1,
       "user_index_before": 0
      },
@@ -1665,6 +1711,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 2,
       "user_index_after": 2,
       "user_index_before": 1
      },
@@ -1674,6 +1721,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 3,
       "user_index_after": 3,
       "user_index_before": 2
      },
@@ -1683,6 +1731,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 4,
       "user_index_after": 4,
       "user_index_before": 3
      },
@@ -1692,6 +1741,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 5,
       "user_index_after": 5,
       "user_index_before": 4
      },
@@ -1701,6 +1751,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 6,
       "user_index_after": 6,
       "user_index_before": 5
      },
@@ -1710,6 +1761,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 7,
       "user_index_after": 7,
       "user_index_before": 6
      },
@@ -1719,6 +1771,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 8,
       "user_index_after": 8,
       "user_index_before": 7
      },
@@ -1728,6 +1781,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 9,
       "user_index_after": 9,
       "user_index_before": 8
      },
@@ -1737,6 +1791,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 10,
       "user_index_after": 10,
       "user_index_before": 9
      },
@@ -1746,6 +1801,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 11,
       "user_index_after": 11,
       "user_index_before": 10
      },
@@ -1755,6 +1811,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 12,
       "user_index_after": 12,
       "user_index_before": 11
      },
@@ -1764,6 +1821,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 13,
       "user_index_after": 13,
       "user_index_before": 12
      },
@@ -1773,6 +1831,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 14,
       "user_index_after": 14,
       "user_index_before": 13
      },
@@ -1782,6 +1841,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 15,
       "user_index_after": 15,
       "user_index_before": 14
      },
@@ -1791,6 +1851,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 16,
       "user_index_after": 16,
       "user_index_before": 15
      },
@@ -1800,6 +1861,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 17,
       "user_index_after": 17,
       "user_index_before": 16
      },
@@ -1809,6 +1871,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 18,
       "user_index_after": 18,
       "user_index_before": 17
      },
@@ -1818,6 +1881,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 19,
       "user_index_after": 19,
       "user_index_before": 18
      },
@@ -1827,6 +1891,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 20,
       "user_index_after": 20,
       "user_index_before": 19
      },
@@ -1836,6 +1901,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 21,
       "user_index_after": 21,
       "user_index_before": 20
      },
@@ -1845,6 +1911,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 22,
       "user_index_after": 22,
       "user_index_before": 21
      },
@@ -1854,6 +1921,7 @@
       ],
       "edits": 1,
       "label": "Place player_spawn",
+      "sequence": 23,
       "user_index_after": 23,
       "user_index_before": 22
      },
@@ -1863,6 +1931,7 @@
       ],
       "edits": 1,
       "label": "Place model",
+      "sequence": 24,
       "user_index_after": 24,
       "user_index_before": 23
      },
@@ -1872,6 +1941,7 @@
       ],
       "edits": 1,
       "label": "Place objective",
+      "sequence": 25,
       "user_index_after": 25,
       "user_index_before": 24
      },
@@ -1881,6 +1951,7 @@
       ],
       "edits": 1,
       "label": "Place unit_spawner",
+      "sequence": 26,
       "user_index_after": 26,
       "user_index_before": 25
      },
@@ -1890,6 +1961,7 @@
       ],
       "edits": 1,
       "label": "Place pickup",
+      "sequence": 27,
       "user_index_after": 27,
       "user_index_before": 26
      },
@@ -1899,6 +1971,7 @@
       ],
       "edits": 1,
       "label": "Place hazard",
+      "sequence": 28,
       "user_index_after": 28,
       "user_index_before": 27
      },
@@ -1908,6 +1981,7 @@
       ],
       "edits": 1,
       "label": "Place navigation_node",
+      "sequence": 29,
       "user_index_after": 29,
       "user_index_before": 28
      },
@@ -1917,6 +1991,7 @@
       ],
       "edits": 1,
       "label": "Place navigation_node",
+      "sequence": 30,
       "user_index_after": 30,
       "user_index_before": 29
      },
@@ -1926,6 +2001,7 @@
       ],
       "edits": 1,
       "label": "Place navigation_node",
+      "sequence": 31,
       "user_index_after": 31,
       "user_index_before": 30
      },
@@ -1935,6 +2011,7 @@
       ],
       "edits": 1,
       "label": "Set link_0",
+      "sequence": 32,
       "user_index_after": 31,
       "user_index_before": 31
      },
@@ -1944,6 +2021,7 @@
       ],
       "edits": 1,
       "label": "Set link_0",
+      "sequence": 33,
       "user_index_after": 31,
       "user_index_before": 31
      },
@@ -1953,6 +2031,7 @@
       ],
       "edits": 1,
       "label": "Set link_1",
+      "sequence": 34,
       "user_index_after": 31,
       "user_index_before": 31
      }

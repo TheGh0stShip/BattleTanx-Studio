@@ -24,7 +24,6 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-import os
 import re
 import secrets
 import time
@@ -33,7 +32,9 @@ from pathlib import Path
 
 from tools.btga_assets import overlay as overlay_module
 
+from .atomic import atomic_write_text
 from .document import EditorDocument, Transaction
+from .history import DefinitionHistory, observe
 from .scene import EditorScene
 
 PROJECT_SCHEMA = "btga-studio-project"
@@ -42,7 +43,7 @@ SUPPORTED_VERSIONS = (1, 2)
 TARGET_GAMES = ("studio", "n64_btga", "n64_bt1", "ps1")
 KEY = re.compile(r"^[a-z0-9][a-z0-9_]{0,47}$")
 KNOWN_TOP = {"schema", "schema_version", "project", "dependencies", "maps", "campaigns", "missions", "multiplayer", "minigames",
-             "tanks", "gangs", "extra"}
+             "tanks", "gangs", "extra", "definition_history"}
 KNOWN_MAP = {"kind", "title", "scene", "source_fingerprint", "base", "overlay", "history", "view", "minimap", "extra"}
 DEFINITION_FAMILIES = ("missions", "multiplayer", "minigames", "tanks", "gangs")
 MAX_TEXT = 200
@@ -100,9 +101,9 @@ def history_document(document: EditorDocument) -> dict:
     """Undo/redo stacks as data.  Undo entries reference the overlay tail; redo entries carry their edits."""
 
     undo = [{"label": t.label, "edits": len(t.edits), "user_index_before": t.user_index_before,
-             "user_index_after": t.user_index_after, "affected": sorted(t.affected)} for t in document.undo_stack]
+             "user_index_after": t.user_index_after, "affected": sorted(t.affected), "sequence": t.sequence} for t in document.undo_stack]
     redo = [{"label": t.label, "edits": copy.deepcopy(t.edits), "user_index_before": t.user_index_before,
-             "user_index_after": t.user_index_after, "affected": sorted(t.affected)} for t in document.redo_stack]
+             "user_index_after": t.user_index_after, "affected": sorted(t.affected), "sequence": t.sequence} for t in document.redo_stack]
     return {"undo": undo, "redo": redo}
 
 
@@ -137,6 +138,14 @@ def _plain_int(value) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
+def _sequence(entry: dict) -> int:
+    value = entry.get("sequence")
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        observe(value)
+        return value
+    return 0  # histories saved before sequences existed sort before anything new
+
+
 def restore_history(document: EditorDocument, history: dict | None) -> None:
     if not history:
         return
@@ -150,10 +159,10 @@ def restore_history(document: EditorDocument, history: dict | None) -> None:
     for entry in history.get("undo", []):
         count = entry["edits"]
         stack.append(Transaction(entry["label"], edits[position:position + count], entry["user_index_before"],
-                                 entry["user_index_after"], set(entry["affected"])))
+                                 entry["user_index_after"], set(entry["affected"]), _sequence(entry)))
         position += count
     redo = [Transaction(entry["label"], copy.deepcopy(entry["edits"]), entry["user_index_before"], entry["user_index_after"],
-                        set(entry["affected"])) for entry in history.get("redo", [])]
+                        set(entry["affected"]), _sequence(entry)) for entry in history.get("redo", [])]
     document.undo_stack = stack
     document.redo_stack = redo
     document._tokens = list(range(1, len(stack) + 1))
@@ -191,7 +200,7 @@ class MapEntry:
     def as_dict(self) -> dict:
         self.sync()
         out = {"kind": self.kind, "title": self.title, "scene": self.scene, "overlay": self.overlay,
-               "history": self.history or {"undo": [], "redo": []}, "view": self.view, "minimap": self.minimap}
+               "history": copy.deepcopy(self.history) or {"undo": [], "redo": []}, "view": self.view, "minimap": self.minimap}
         if self.source_fingerprint:
             out["source_fingerprint"] = self.source_fingerprint
         if self.base is not None:
@@ -219,6 +228,16 @@ class StudioProject:
         self.unknown: dict = {}
         self.path: Path | None = None
         self.saved_text: str | None = None
+        self.definitions = DefinitionHistory(self)
+
+    @property
+    def saved_text(self) -> str | None:
+        return self._saved_text
+
+    @saved_text.setter
+    def saved_text(self, text: str | None) -> None:
+        self._saved_text = text
+        self._saved_content = _content(json.loads(text)) if text else None
 
     # -- maps -----------------------------------------------------------------------
     def add_imported_map(self, key: str, library, scene_id: str, title: str | None = None) -> MapEntry:
@@ -307,9 +326,11 @@ class StudioProject:
 
     @property
     def dirty(self) -> bool:
-        if self.saved_text is None:
+        """Unsaved changes to project content.  Undo history is not content: undoing back to the saved state is clean."""
+
+        if self._saved_content is None:
             return True
-        return dumps(self) != self.saved_text
+        return _content(json.loads(dumps(self))) != self._saved_content
 
     # -- definitions -------------------------------------------------------------------------
     def define(self, family: str, key: str, data: dict) -> None:
@@ -402,7 +423,11 @@ class StudioProject:
         }
         if self.extra:
             data["extra"] = self.extra
+        history = self.definitions.as_dict()
+        if history["undo"] or history["redo"]:
+            data["definition_history"] = history
         data.update(self.unknown)
+        _rank_sequences(data)
         return data
 
     @classmethod
@@ -457,6 +482,7 @@ class StudioProject:
         for family in DEFINITION_FAMILIES:
             setattr(project, family, copy.deepcopy(data.get(family) or {}))
         project.extra = copy.deepcopy(data.get("extra") or {})
+        project.definitions.load(data.get("definition_history"))
         project.unknown = {key: copy.deepcopy(value) for key, value in data.items() if key not in KNOWN_TOP}
         return project
 
@@ -476,6 +502,35 @@ def _record_ids(entry: MapEntry) -> set[str] | None:
 
 def _source_key(source: dict) -> tuple:
     return (source.get("platform"), source.get("rom_sha256") or source.get("file_sha256") or source.get("rom_sha1") or "")
+
+
+def _rank_sequences(data: dict) -> None:
+    """Replace live sequence numbers with their rank (1..N) across every saved history.
+
+    The live numbers come from a process-wide counter, so writing them would make the same project serialise
+    differently from run to run.  Ranks keep the cross-history order (which Undo reverses first) and are deterministic.
+    """
+
+    entries = []
+    for entry in (data.get("maps") or {}).values():
+        history = entry.get("history") or {}
+        entries += [item for name in ("undo", "redo") for item in history.get(name, [])]
+    definition = data.get("definition_history") or {}
+    entries += [item for name in ("undo", "redo") for item in definition.get(name, [])]
+    numbered = sorted({item["sequence"] for item in entries if isinstance(item.get("sequence"), int) and item["sequence"] > 0})
+    rank = {value: position + 1 for position, value in enumerate(numbered)}
+    for item in entries:
+        if item.get("sequence") in rank:
+            item["sequence"] = rank[item["sequence"]]
+
+
+def _content(data: dict) -> str:
+    """Canonical project content without undo histories (used for the unsaved-changes state)."""
+
+    data = dict(data)
+    data.pop("definition_history", None)
+    data["maps"] = {key: {k: v for k, v in entry.items() if k != "history"} for key, entry in (data.get("maps") or {}).items()}
+    return json.dumps(data, sort_keys=True, ensure_ascii=False)
 
 
 def migrate_v1(data: dict) -> dict:
@@ -512,11 +567,8 @@ def loads_project(text: str) -> StudioProject:
 
 def save_project(path: Path, project: StudioProject) -> None:
     path = Path(path)
-    text = dumps(project)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(text, encoding="utf-8")
-    os.replace(temporary, path)
+    text = dumps(project)  # serialise first: a failure here leaves the existing file untouched
+    atomic_write_text(path, text)
     for entry in project.maps.values():
         if entry.document is not None:
             entry.document.mark_saved()
@@ -598,12 +650,10 @@ class Autosaver:
         path = self.recovery_path(item)
         path.parent.mkdir(parents=True, exist_ok=True)
         text = dumps(item) if isinstance(item, StudioProject) else dumps_document(item)
-        temporary = path.with_name(path.name + ".tmp")
-        temporary.write_text(text, encoding="utf-8")
-        os.replace(temporary, path)
+        atomic_write_text(path, text)
         meta = {"title": item.project.get("title") if isinstance(item, StudioProject) else item.scene.level_id,
                 "project_path": str(item.path) if isinstance(item, StudioProject) and item.path else None}
-        path.with_name(path.name + ".json").write_text(json.dumps(meta, sort_keys=True), encoding="utf-8")
+        atomic_write_text(path.with_name(path.name + ".json"), json.dumps(meta, sort_keys=True))
         return path
 
     def discard(self, item) -> None:

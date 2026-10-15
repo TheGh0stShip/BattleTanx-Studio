@@ -20,6 +20,7 @@ from tools.btga_assets import overlay as overlay_module
 from tools.btga_assets.semantics import field_errors
 
 from . import geometry as g
+from .history import next_sequence
 from .scene import EditorScene
 
 READ_ONLY_CATEGORIES = {"untraced_handler", "ignored_by_dispatcher", "inactive_in_marker_group"}
@@ -36,6 +37,7 @@ class Transaction:
     user_index_before: int
     user_index_after: int
     affected: set[str]
+    sequence: int = 0  # shared with project-level definition history (core.history.next_sequence)
 
 
 @dataclass
@@ -105,7 +107,7 @@ class EditorDocument:
             for key in ("marker", "collision", "instance"):
                 if key in edit and edit["op"].startswith("add_"):
                     affected.add(edit[key]["id"])
-        transaction = Transaction(label, stored, before, self.overlay.next_user_index, affected)
+        transaction = Transaction(label, stored, before, self.overlay.next_user_index, affected, next_sequence())
         self.undo_stack.append(transaction)
         self.redo_stack.clear()
         self._token += 1

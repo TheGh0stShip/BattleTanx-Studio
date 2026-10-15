@@ -96,11 +96,12 @@ class AssetIndex:
             group = next((name for name, members in GAMEPLAY_GROUPS.items() if record.get("category") in members), "Other gameplay")
             reason = is_read_only(record)
             self.map_entries.append(_entry(id=record["id"], kind="gameplay", category=group, platform=platform,
-                                           label=f"{record.get('category')} ({record.get('source_kind')})", source="user" if user else "source",
+                                           label=f"{str(record.get('category')).replace('_', ' ')}{' (placed)' if user else ''}", source="user" if user else "source",
                                            editable=reason is None, detail=reason or record.get("confidence", "")))
         for number, env in enumerate(scene.base.get("environment", [])):
             self.map_entries.append(_entry(id=f"environment:{number}", kind="environment", category="Environment", platform=platform,
-                                           label=f"environment kind {env.get('kind', '?')}", editable=False, detail="read-only"))
+                                           label="Map sky and fog", editable=False,
+                                           detail="shown in the inspector when nothing is selected"))
         for family, record in scene.records("instances"):
             if record.get("source", {}).get("user_created"):
                 self.map_entries.append(_entry(id=record["id"], kind="model", category="User-placed", platform=platform,

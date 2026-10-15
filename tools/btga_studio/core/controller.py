@@ -8,13 +8,13 @@ gui.input; tests drive the same object headlessly.  The controller owns:
 * the open project (``StudioProject``) and its active map document;
 * placement, selection (click, toggle, box), clipboard, view state,
   gizmo transactions, background diagnostics, autosave and recovery;
-* the Source Manager with background, cancellable catalog builds.
+* the Source Manager and every long operation as background jobs
+  (``core.jobs``) with progress, cancellation and logged failures.
 """
 
 from __future__ import annotations
 
 import math
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -22,11 +22,14 @@ from pathlib import Path
 
 import numpy as np
 
+from . import applog
 from . import diagnostics as diag
 from . import geometry as g
 from . import project as projects
 from .browser import AssetIndex
+from .atomic import atomic_write_bytes
 from .document import EditError, EditorDocument, is_read_only
+from .jobs import JobRunner
 from .library import LibrarySet
 from .scene import MeshCache, record_box
 from .settings import Settings
@@ -42,23 +45,8 @@ class PlacementMode:
     yaw: int = 0
 
 
-@dataclass
-class BuildJob:
-    source_id: str
-    stage: str = "queued"
-    done: int = 0
-    total: int = 1
-    error: str | None = None
-    finished: bool = False
-    cancel: threading.Event | None = None
-
-    @property
-    def fraction(self) -> float:
-        return min(1.0, self.done / self.total) if self.total else 0.0
-
-
 class EditorController:
-    def __init__(self, settings: Settings, log=None, use_registry: bool = True, starter: bool = True):
+    def __init__(self, settings: Settings, log=None, use_registry: bool = True, starter: bool = True, log_to_disk: bool = True):
         self.settings = settings
         self.preferences = settings.preferences
         self.library: LibrarySet | None = None
@@ -84,12 +72,16 @@ class EditorController:
         self.log_sink = log
         self.timings: dict[str, float] = {}
         self.registry = None
-        self.builds: dict[str, BuildJob] = {}
+        self.logger = applog.open_log(settings.logs_directory) if log_to_disk else None
+        self.jobs = JobRunner(workers=2, max_pending=16, log=self._job_logged)
         self._starter_enabled = starter
         if use_registry:
             from .sources import SourceRegistry
 
-            self.registry = SourceRegistry(settings.directory)
+            self.registry = SourceRegistry(settings.directory, settings.local_directory)
+            for problem in self.registry.problems:
+                self.log("warning", problem)
+        self.history_listener = None  # the GUI restores editor context after a keyboard undo/redo
         self._gizmo_start = None
         self._gizmo_duplicated = False
         self._gizmo_selection: list[str] = []
@@ -97,6 +89,7 @@ class EditorController:
 
     # -- messages ---------------------------------------------------------------
     def log(self, level: str, text: str) -> None:
+        applog.write(getattr(self, "logger", None), level, "message", text)
         self.messages.append((level, text))
         del self.messages[:-500]
         if self.log_sink:
@@ -436,11 +429,40 @@ class EditorController:
         self.request_diagnostics()
         return result
 
+    # One Undo command for map objects and gameplay definitions: each transaction carries a number from the
+    # shared sequence (core.history), so undo reverses the most recent action and redo the most recently undone.
+    def _definitions(self):
+        return self.project.definitions if self.project is not None else None
+
+    @property
+    def can_undo(self) -> bool:
+        defs = self._definitions()
+        return bool((self.document and self.document.undo_stack) or (defs and defs.undo_stack))
+
+    @property
+    def can_redo(self) -> bool:
+        defs = self._definitions()
+        return bool((self.document and self.document.redo_stack) or (defs and defs.redo_stack))
+
     def undo(self):
-        return self.run("undo", self.document.undo) if self.document else None
+        doc, defs = self.document, self._definitions()
+        doc_seq = doc.undo_stack[-1].sequence if doc and doc.undo_stack and not doc.transforming else None
+        def_seq = defs.undo_sequence if defs else None
+        if def_seq is not None and (doc_seq is None or def_seq > doc_seq):
+            entry = defs.undo()
+            self.request_diagnostics()
+            return entry
+        return self.run("undo", doc.undo) if doc else None
 
     def redo(self):
-        return self.run("redo", self.document.redo) if self.document else None
+        doc, defs = self.document, self._definitions()
+        doc_seq = doc.redo_stack[-1].sequence if doc and doc.redo_stack else None
+        def_seq = defs.redo_sequence if defs else None
+        if def_seq is not None and (doc_seq is None or def_seq < doc_seq):
+            entry = defs.redo()
+            self.request_diagnostics()
+            return entry
+        return self.run("redo", doc.redo) if doc else None
 
     def duplicate(self):
         return self.run("duplicate", self.document.duplicate) if self.document and self.document.selection else None
@@ -558,7 +580,9 @@ class EditorController:
         elif name == "box_select":
             self.box_select(args["rect"], args.get("add", False))
         elif name in ("undo", "redo", "duplicate", "delete", "copy", "paste", "select_all"):
-            getattr(self, name)()
+            result = getattr(self, name)()
+            if name in ("undo", "redo") and self.history_listener is not None:
+                self.history_listener(result)
         elif name in ("hide", "isolate", "lock", "unhide_all") and document is not None:
             getattr(document, name)()
         elif name == "save" and self.project_path:
@@ -596,7 +620,19 @@ class EditorController:
         return [diag.Diagnostic("error", p["code"], p["message"], p["target"], p["field"]) for p in self.project.problems(self.library)]
 
     # -- sources --------------------------------------------------------------------------
+    def identify_source(self, path: Path, on_done=None):
+        """Identify a file or folder in the background without registering it (result: ``Source``)."""
+
+        from .sources import identify
+
+        def work(context):
+            return identify(Path(path), lambda stage, done, total: context.progress(stage, done, total))
+
+        return self.jobs.submit(f"Checking {Path(path).name}", work, "identify", on_done)
+
     def add_source(self, path: Path):
+        """Register synchronously (developer and test use; the GUI uses ``add_source_async``)."""
+
         from .sources import SourceError
 
         try:
@@ -607,48 +643,105 @@ class EditorController:
         self.log("info", f"registered {source.title} ({source.status})")
         return source
 
-    def build_catalog(self, source_id: str, wait: bool = False) -> BuildJob:
-        """Build a source's catalog on a background thread; the job reports progress and can be cancelled."""
+    def add_source_async(self, path: Path, on_done=None):
+        def work(context):
+            return self.registry.register(Path(path), lambda stage, done, total: context.progress(stage, done, total))
 
-        from .sources import Cancelled
+        def done(job):
+            if job.state == "done":
+                self.log("info", f"registered {job.result.title}")
+            if on_done:
+                on_done(job)
 
-        job = BuildJob(source_id, cancel=threading.Event())
-        self.builds[source_id] = job
+        return self.jobs.submit(f"Registering {Path(path).name}", work, "register", done)
 
-        def progress(stage, done, total):
-            job.stage, job.done, job.total = stage, done, total or 1
+    def verify_sources(self, on_done=None):
+        def work(context):
+            ids = sorted(self.registry.sources)
+            for number, source_id in enumerate(ids):
+                context.progress("checking", number, len(ids))
+                self.registry.verify(source_id)
+            return len(ids)
 
-        def work():
-            try:
-                self.registry.build_catalog(source_id, progress, job.cancel)
-                job.stage = "done"
-            except Cancelled:
-                job.stage, job.error = "cancelled", "cancelled"
-            except Exception as error:
-                job.stage, job.error = "failed", f"{type(error).__name__}: {error}"
-            finally:
-                job.finished = True
+        return self.jobs.submit("Checking registered sources", work, "verify", on_done)
 
-        thread = threading.Thread(target=work, name=f"catalog-{source_id}", daemon=True)
-        thread.start()
+    def search_sources(self, folder: Path, on_done=None):
+        """Look for missing sources under ``folder`` by content and relink those found (result: number relinked)."""
+
+        def work(context):
+            context.progress("searching", 0, None)
+            found = self.registry.search(Path(folder))
+            for source_id, path in found.items():
+                context.check()
+                self.registry.relocate(source_id, path)
+            return len(found)
+
+        return self.jobs.submit(f"Searching {Path(folder).name}", work, "search", on_done)
+
+    def relink_source(self, source_id: str, path: Path, on_done=None):
+        def work(context):
+            context.progress("checking", 0, None)
+            return self.registry.relocate(source_id, Path(path))
+
+        return self.jobs.submit("Relinking source", work, "relink", on_done)
+
+    def remove_source(self, source_id: str, delete_catalog: bool = True) -> None:
+        """Forget a registration (the user's file or folder is never touched)."""
+
+        title = self.registry.sources[source_id].title
+        self.registry.remove(source_id, delete_catalog)
+        self.refresh_library()
+        self.log("info", f"removed {title} from Studio; your file was not changed")
+
+    def build_catalog(self, source_id: str, wait: bool = False, on_done=None):
+        """Build (or rebuild) a source's catalog in the background; a failure keeps the previous catalog."""
+
+        def work(context):
+            return self.registry.build_catalog(source_id, lambda stage, done, total: context.progress(stage, done, total),
+                                               context.cancel_event)
+
+        def done(job):
+            if job.state == "done":
+                self.log("info", f"catalog ready for {self.registry.sources[source_id].title}")
+                self.refresh_library()
+            elif job.state == "cancelled":
+                self.log("warning", "catalog build cancelled; the previous catalog (if any) is unchanged")
+            if on_done:
+                on_done(job)
+
+        job = self.jobs.submit(f"Building catalog for {self.registry.sources[source_id].title}", work, "catalog", done)
+        job.source_id = source_id
         if wait:
-            thread.join()
-            self.finish_builds()
+            self.jobs.wait(timeout=24 * 3600)
         return job
 
-    def finish_builds(self) -> None:
-        """Pick up finished builds (called each frame) and refresh the library once."""
+    @property
+    def builds(self) -> dict:
+        return {getattr(job, "source_id", None): job for job in self.jobs.find("catalog")}
 
-        finished = [job for job in self.builds.values() if job.finished]
-        if not finished:
-            return
-        for job in finished:
-            del self.builds[job.source_id]
-            if job.error:
-                self.log("error" if job.stage == "failed" else "warning", f"catalog build {job.source_id}: {job.error}")
-            else:
-                self.log("info", f"catalog built for {job.source_id}")
-        self.refresh_library()
+    def export_package(self, path: Path, studio_version: str = "0", on_done=None):
+        """Validate and write a content package in the background (atomic; result: path)."""
+
+        from .package import build_package
+
+        project, library = self.project, self.library
+        target = Path(path)
+
+        def work(context):
+            context.progress("validating", 0, 2)
+            data = build_package(project, library, studio_version)
+            context.progress("writing", 1, 2)
+            atomic_write_bytes(target, data)
+            return target
+
+        return self.jobs.submit(f"Exporting {target.name}", work, "export", on_done)
+
+    def _job_logged(self, job) -> None:
+        if job.state == "failed":
+            self.log("error", f"{job.label} failed: {job.error}")
+            applog.write(self.logger, "error", "job_failed", job.label, kind=job.kind, detail=job.detail or "")
+        else:
+            applog.write(self.logger, "info", "job_" + job.state, job.label, kind=job.kind)
 
     def tick(self) -> None:
         self.autosaver.enabled = self.preferences.autosave_enabled
@@ -661,14 +754,13 @@ class EditorController:
                 path = None
             if path:
                 self.log("info", "recovery copy written")
-        self.finish_builds()
+        self.jobs.poll()
         self.poll_diagnostics()
 
     def shutdown(self) -> None:
-        for job in self.builds.values():
-            if job.cancel:
-                job.cancel.set()
+        self.jobs.shutdown()
         self._diag_pool.shutdown(wait=False, cancel_futures=True)
+        applog.close(self.logger)
 
 
 class _Snapshot:
